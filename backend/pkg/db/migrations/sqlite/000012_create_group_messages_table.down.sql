@@ -1,2 +1,2 @@
--- Rollback migration: Drop group_messages table
+-- Rollback: Drop group_messages table
 DROP TABLE IF EXISTS group_messages;
