@@ -1,2 +1,2 @@
--- Rollback migration: Drop notifications table
+-- Rollback: Drop notifications table
 DROP TABLE IF EXISTS notifications;
