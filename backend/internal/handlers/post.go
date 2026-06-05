@@ -76,3 +76,54 @@ func (h *postHandler) GetPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(post)
 }
+
+// GetPosts handles GET /posts requests with filtering and pagination
+func (h *postHandler) GetPosts(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	limit := r.URL.Query().Get("limit")
+	offset := r.URL.Query().Get("offset")
+	userIDStr := r.URL.Query().Get("user_id")
+	groupIDStr := r.URL.Query().Get("group_id")
+
+	// Build filter
+	filter := PostFilter{
+		Limit:  20, // default
+		Offset: 0,  // default
+	}
+
+	// Parse limit
+	if limit != "" {
+		// parse limit
+	}
+	// Parse offset
+	if offset != "" {
+		// parse offset
+	}
+
+	// Parse user filter
+	if userIDStr != "" {
+		userID, err := uuid.Parse(userIDStr)
+		if err == nil {
+			filter.UserID = &userID
+		}
+	}
+
+	// Parse group filter
+	if groupIDStr != "" {
+		groupID, err := uuid.Parse(groupIDStr)
+		if err == nil {
+			filter.GroupID = &groupID
+		}
+	}
+
+	// Get posts via service
+	posts, err := h.postService.GetPosts(r.Context(), filter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return posts
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(posts)
+}
