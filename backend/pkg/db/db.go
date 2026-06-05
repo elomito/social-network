@@ -22,20 +22,27 @@ func RunMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to create sqlite3 migration driver: %w", err)
 	}
 
-	// 2. Point to the exact directory where your raw .sql files live
+	// 2. string a file where a db can be applied changes and done awy with changes
 	migrationFolder := "file://pkg/db/migrations/sqlite"
 
-	// 3. Initialize the migration engine wrapper
+	// 3. started our migrator engine
 	migrator, err := migrate.NewWithDatabaseInstance(migrationFolder, "sqlite3", driver)
 	if err != nil {
 		return fmt.Errorf("failed to initialize migrator engine: %w", err)
 	}
 
-	// 4. Execute all pending upgrade schemas (.up.sql) sequentially
+	// 4. migration up is called scans all tables and sees what needs to be updated
 	log.Println("🚀 [MIGRATION] Applying structural table updates...")
 	if err := migrator.Up(); err != nil {
-		// If there are no new changes to apply, it's NOT an error. We handle it safely.
+		// It can be hundled safely because no changes to apply
 		if errors.Is(err, migrate.ErrNoChange) {
 			log.Println("✅ [MIGRATION] Database is already completely up to date! No changes needed.")
 			return nil
 		}
+
+		return fmt.Errorf("migration execution failed: %w", err)
+	}
+
+	log.Println("🎉 [MIGRATION] Success! All tables built and verified sequentially.")
+	return nil
+}
