@@ -328,3 +328,69 @@ func (s *postService) GetReactions(ctx context.Context, postID uuid.UUID) ([]Pos
 func (s *postService) GetUserReaction(ctx context.Context, userID, postID uuid.UUID) (*PostReaction, error) {
 	return s.reactionRepo.GetPostReaction(ctx, userID, postID)
 }
+
+// AddComment adds a comment to a post
+func (s *postService) AddComment(ctx context.Context, userID, postID uuid.UUID, req AddCommentRequest) (*Comment, error) {
+	// Verify post exists and is visible
+	_, err := s.GetPost(ctx, postID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If parent comment is provided, verify it exists and belongs to the same post
+	if req.ParentID != nil {
+		parent, err := s.commentRepo.GetByID(ctx, *req.ParentID)
+		if err != nil {
+			return nil, errors.New("parent comment not found")
+		}
+		if parent.PostID != postID {
+			return nil, errors.New("parent comment does not belong to this post")
+		}
+	}
+
+	now := time.Now()
+	comment := &Comment{
+		ID:        uuid.New(),
+		UserID:    userID,
+		PostID:    postID,
+		ParentID:  req.ParentID,
+		Content:   req.Content,
+		ImageID:   req.ImageID,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := s.commentRepo.Create(ctx, comment); err != nil {
+		return nil, err
+	}
+
+	return comment, nil
+}
+
+// GetComments retrieves comments for a post
+func (s *postService) GetComments(ctx context.Context, postID uuid.UUID) ([]Comment, error) {
+	return s.commentRepo.GetByPostID(ctx, postID)
+}
+
+// DeleteComment soft-deletes a comment
+func (s *postService) DeleteComment(ctx context.Context, commentID, userID uuid.UUID) error {
+	comment, err := s.commentRepo.GetByID(ctx, commentID)
+	if err != nil {
+		return errors.New("comment not found")
+	}
+
+	// Allow deletion by comment author or post author
+	post, err := s.postRepo.GetByID(ctx, comment.PostID)
+	if err != nil {
+		return err
+	}
+
+	if comment.UserID != userID && post.UserID != userID {
+		return errors.New("unauthorized")
+	}
+
+	now := time.Now()
+	comment.DeletedAt = &now
+
+	return s.commentRepo.Update(ctx, comment)
+}
