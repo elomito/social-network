@@ -394,3 +394,82 @@ func (s *postService) DeleteComment(ctx context.Context, commentID, userID uuid.
 
 	return s.commentRepo.Update(ctx, comment)
 }
+
+// CheckPostVisibility determines if a user can view a post
+func (s *postService) CheckPostVisibility(ctx context.Context, postID, viewerID uuid.UUID) (bool, error) {
+	post, err := s.postRepo.GetByID(ctx, postID)
+	if err != nil {
+		return false, err
+	}
+
+	// Soft-deleted posts are not visible
+	if post.DeletedAt != nil {
+		return false, errors.New("post not found")
+	}
+
+	// Author can always view their own post
+	if post.UserID == viewerID {
+		return true, nil
+	}
+
+	switch post.PrivacyLevel {
+	case "public":
+		return true, nil
+	case "friends":
+		// Check if there is an accepted follow relationship
+		follow, err := s.userRepo.GetFollowRelationship(ctx, post.UserID, viewerID)
+		if err != nil {
+			return false, err
+		}
+		return follow != nil && follow.Status == "accepted", nil
+	case "private":
+		// Check if viewer is in the PostRecipient list
+		recipients, err := s.postRepo.GetRecipients(ctx, postID)
+		if err != nil {
+			return false, err
+		}
+		for _, recipient := range recipients {
+			if recipient.UserID == viewerID {
+				return true, nil
+			}
+		}
+		return false, nil
+	case "group":
+		// Check if viewer is a member of the group
+		// This requires the post to have a group association
+		// For now, assuming group posts have a group ID stored
+		return false, errors.New("group privacy check not implemented")
+	default:
+		return false, errors.New("unknown privacy level")
+	}
+}
+
+// AddPostRecipient adds a recipient to a private post
+func (s *postService) AddPostRecipient(ctx context.Context, postID, recipientID uuid.UUID) error {
+	recipient := &PostRecipient{
+		ID:        uuid.New(),
+		PostID:    postID,
+		UserID:    recipientID,
+		CreatedAt: time.Now(),
+	}
+	return s.postRepo.AddRecipient(ctx, recipient)
+}
+
+// GetPostRecipients retrieves all recipients of a private post
+func (s *postService) GetPostRecipients(ctx context.Context, postID uuid.UUID) ([]User, error) {
+	recipients, err := s.postRepo.GetRecipients(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+
+	var users []User
+	for _, recipient := range recipients {
+		user, err := s.userRepo.GetByID(ctx, recipient.UserID)
+		if err != nil {
+			continue
+		}
+		users = append(users, *user)
+	}
+
+	return users, nil
+}
