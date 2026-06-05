@@ -283,3 +283,48 @@ func (s *postService) DeletePost(ctx context.Context, postID, userID uuid.UUID) 
 
 	return nil
 }
+
+// AddReaction adds a like or dislike to a post
+func (s *postService) AddReaction(ctx context.Context, userID, postID uuid.UUID, reactionType ReactionType) error {
+	// Verify post exists and is visible
+	_, err := s.GetPost(ctx, postID, userID)
+	if err != nil {
+		return err
+	}
+
+	// Check if user already has a reaction
+	existing, err := s.reactionRepo.GetPostReaction(ctx, userID, postID)
+	if err == nil && existing != nil {
+		// If same type, no-op
+		if existing.ReactionType == reactionType {
+			return nil
+		}
+		// If different type, update
+		existing.ReactionType = reactionType
+		return s.reactionRepo.UpdatePostReaction(ctx, existing)
+	}
+
+	// Create new reaction
+	reaction := &PostReaction{
+		UserID:       userID,
+		PostID:       postID,
+		ReactionType: reactionType,
+	}
+
+	return s.reactionRepo.CreatePostReaction(ctx, reaction)
+}
+
+// RemoveReaction removes a user's reaction from a post
+func (s *postService) RemoveReaction(ctx context.Context, userID, postID uuid.UUID) error {
+	return s.reactionRepo.DeletePostReaction(ctx, userID, postID)
+}
+
+// GetReactions retrieves all reactions for a post
+func (s *postService) GetReactions(ctx context.Context, postID uuid.UUID) ([]PostReaction, error) {
+	return s.reactionRepo.GetPostReactions(ctx, postID)
+}
+
+// GetUserReaction retrieves the current user's reaction to a post
+func (s *postService) GetUserReaction(ctx context.Context, userID, postID uuid.UUID) (*PostReaction, error) {
+	return s.reactionRepo.GetPostReaction(ctx, userID, postID)
+}
