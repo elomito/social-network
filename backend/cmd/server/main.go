@@ -1,30 +1,76 @@
 package main
 
 import (
-	"database/sql"
 	"log"
+	"net/http"
 
-	// 1. Imports our own database package so main.go can use RunMigrations
-	"social-network/pkg/db"
-
-	// 2. Registers the SQLite3 driver behind the scenes so sql.Open knows how to work
-	_ "github.com/mattn/go-sqlite3"
+	"backend/internal/handlers"
+	"backend/internal/repository"
+	"backend/internal/services"
+	"backend/pkg/db"
 )
 
 func main() {
-	log.Println("--- Launching Social Network Core Application ---")
+	// -----------------------------
+	// Application configuration
+	// -----------------------------
 
-	// 3. Opens or creates our local database file.
-	sqliteConn, err := sql.Open("sqlite3", "./social_network.db")
+	dbConfig := db.DefaultConfig("data/app.db")
+	serverAddr := ":8080"
+
+	// -----------------------------
+	// Initialize database
+	// -----------------------------
+
+	database, err := db.NewSQLite(dbConfig)
 	if err != nil {
-		log.Fatalf("❌ BOOT ERROR: Could not open database connection: %v", err)
+		log.Fatalf("failed to initialize database: %v", err)
 	}
-	defer sqliteConn.Close()
+	defer database.Close()
 
-	// 4. Calls your automated script to read SQL files and build tables BEFORE the server turns on
-	if err := db.RunMigrations(sqliteConn); err != nil {
-		log.Fatalf("❌ BOOT ERROR: Database migration pipeline failed: %v", err)
+	log.Println("database connected")
+
+	// -----------------------------
+	// Initialize repositories
+	// -----------------------------
+
+	eventRepo := repository.NewEventRepository(database.Conn())
+	eventResponseRepo := repository.NewEventResponseRepository(database.Conn())
+
+	// -----------------------------
+	// Initialize services
+	// -----------------------------
+
+	eventService := services.NewEventService(eventRepo, eventResponseRepo)
+
+	// -----------------------------
+	// Initialize handlers
+	// -----------------------------
+
+	eventHandler := handlers.NewEventHandler(eventService)
+
+	// -----------------------------
+	// Set up routes
+	// -----------------------------
+
+	mux := http.NewServeMux()
+
+	// Event routes
+	mux.HandleFunc("POST /events", eventHandler.CreateEvent)
+	mux.HandleFunc("GET /events/{id}", eventHandler.GetEvent)
+	mux.HandleFunc("GET /groups/{id}/events", eventHandler.ListGroupEvents)
+	mux.HandleFunc("PUT /events/{id}", eventHandler.UpdateEvent)
+	mux.HandleFunc("DELETE /events/{id}", eventHandler.DeleteEvent)
+	mux.HandleFunc("POST /events/{id}/responses", eventHandler.CreateEventResponse)
+	mux.HandleFunc("GET /events/{id}/responses", eventHandler.GetEventResponses)
+	mux.HandleFunc("DELETE /events/{id}/responses", eventHandler.DeleteEventResponse)
+
+	// -----------------------------
+	// Start server
+	// -----------------------------
+
+	log.Printf("server starting on %s", serverAddr)
+	if err := http.ListenAndServe(serverAddr, mux); err != nil {
+		log.Fatalf("server failed: %v", err)
 	}
-
-	log.Println("🌐 System online! Database verification completely successful.")
 }
