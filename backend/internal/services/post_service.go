@@ -208,3 +208,78 @@ func (s *postService) GetPosts(ctx context.Context, filter PostFilter) ([]Post, 
 
 	return posts, nil
 }
+
+// UpdatePost updates an existing post with validation
+func (s *postService) UpdatePost(ctx context.Context, postID, userID uuid.UUID, req UpdatePostRequest) (*Post, error) {
+	post, err := s.postRepo.GetByID(ctx, postID)
+	if err != nil {
+		return nil, errors.New("post not found")
+	}
+
+	// Verify ownership
+	if post.UserID != userID {
+		return nil, errors.New("unauthorized")
+	}
+
+	// Update fields if provided
+	if req.Content != nil {
+		post.Content = *req.Content
+	}
+	if req.ImageID != nil {
+		// Verify image exists and belongs to user
+		_, err := s.imageRepo.GetByID(ctx, *req.ImageID)
+		if err != nil {
+			return nil, errors.New("invalid image")
+		}
+		post.ImageID = req.ImageID
+	}
+	if req.PrivacyLevel != nil {
+		validPrivacy := map[string]bool{"public": true, "friends": true, "private": true, "group": true}
+		if !validPrivacy[*req.PrivacyLevel] {
+			return nil, errors.New("invalid privacy level")
+		}
+		post.PrivacyLevel = *req.PrivacyLevel
+	}
+
+	post.UpdatedAt = time.Now()
+
+	if err := s.postRepo.Update(ctx, post); err != nil {
+		return nil, err
+	}
+
+	// Publish event for real-time updates
+	s.websocketHub.Publish(WebSocketMessage{
+		Type: "post_updated",
+		Data: post,
+	})
+
+	return post, nil
+}
+
+// DeletePost soft-deletes a post
+func (s *postService) DeletePost(ctx context.Context, postID, userID uuid.UUID) error {
+	post, err := s.postRepo.GetByID(ctx, postID)
+	if err != nil {
+		return errors.New("post not found")
+	}
+
+	// Verify ownership
+	if post.UserID != userID {
+		return errors.New("unauthorized")
+	}
+
+	now := time.Now()
+	post.DeletedAt = &now
+
+	if err := s.postRepo.Update(ctx, post); err != nil {
+		return err
+	}
+
+	// Publish event for real-time updates
+	s.websocketHub.Publish(WebSocketMessage{
+		Type: "post_deleted",
+		Data: map[string]uuid.UUID{"post_id": postID},
+	})
+
+	return nil
+}
