@@ -231,3 +231,30 @@ func (h *postHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	// Return success
 	w.WriteHeader(http.StatusOK)
 }
+
+// RemoveReaction handles DELETE /posts/:id/reactions requests
+func (h *postHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
+	// Extract post ID from URL
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+
+	// Extract user ID from context
+	userID, ok := r.Context().Value("user_id").(uuid.UUID)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Remove reaction via service
+	err = h.postService.RemoveReaction(r.Context(), userID, postID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return no content
+	w.WriteHeader(http.StatusNoContent)
+}
