@@ -258,3 +258,39 @@ func (h *postHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
 	// Return no content
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// AddComment handles POST /posts/:id/comments requests
+func (h *postHandler) AddComment(w http.ResponseWriter, r *http.Request) {
+	// Extract post ID from URL
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+
+	// Extract user ID from context
+	userID, ok := r.Context().Value("user_id").(uuid.UUID)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse request body
+	var req AddCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Add comment via service
+	comment, err := h.postService.AddComment(r.Context(), userID, postID, req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return created comment
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(comment)
+}
