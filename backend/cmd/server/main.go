@@ -3,30 +3,28 @@ package main
 import (
 	"database/sql"
 	"log"
-	"net/http"
 
-	// Replace "social-network" with your exact module name from your go.mod file
+	// 1. Imports our own database package so main.go can use RunMigrations
 	"social-network/pkg/db"
 
-	// The driver that allows Go to interact with SQLite files
+	// 2. Registers the SQLite3 driver behind the scenes so sql.Open knows how to work
 	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
 	log.Println("--- Launching Social Network Core Application ---")
 
-	// 1. Open your project's SQLite database file
+	// 3. Opens or creates our local database file.
 	sqliteConn, err := sql.Open("sqlite3", "./social_network.db")
 	if err != nil {
 		log.Fatalf("❌ BOOT ERROR: Could not open database connection: %v", err)
 	}
 	defer sqliteConn.Close()
 
-	// 2. Trigger your programmatic migration runner pipeline before starting the server
+	// 4. Calls your automated script to read SQL files and build tables BEFORE the server turns on
 	if err := db.RunMigrations(sqliteConn); err != nil {
 		log.Fatalf("❌ BOOT ERROR: Database migration pipeline failed: %v", err)
 	}
 
-	log.Println("🌐 System online! Starting web server listener on port :8080...")
-	// http.ListenAndServe(":8080", nil)
+	log.Println("🌐 System online! Database verification completely successful.")
 }
