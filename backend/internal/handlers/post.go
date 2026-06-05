@@ -189,3 +189,45 @@ func (h *postHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
 	// Return no content
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// AddReaction handles POST /posts/:id/reactions requests
+func (h *postHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
+	// Extract post ID from URL
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+
+	// Extract user ID from context
+	userID, ok := r.Context().Value("user_id").(uuid.UUID)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse reaction type from request body
+	var req struct {
+		ReactionType string `json:"reaction_type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate reaction type
+	if req.ReactionType != "like" && req.ReactionType != "dislike" {
+		http.Error(w, "invalid reaction type", http.StatusBadRequest)
+		return
+	}
+
+	// Add reaction via service
+	err = h.postService.AddReaction(r.Context(), userID, postID, ReactionType(req.ReactionType))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return success
+	w.WriteHeader(http.StatusOK)
+}
