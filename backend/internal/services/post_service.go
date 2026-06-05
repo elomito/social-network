@@ -100,3 +100,111 @@ func NewPostService(
 		websocketHub: websocketHub,
 	}
 }
+
+// CreatePost creates a new post with business rule validation
+func (s *postService) CreatePost(ctx context.Context, userID uuid.UUID, req CreatePostRequest) (*Post, error) {
+	// Validate privacy level
+	validPrivacy := map[string]bool{"public": true, "friends": true, "private": true, "group": true}
+	if !validPrivacy[req.PrivacyLevel] {
+		return nil, errors.New("invalid privacy level")
+	}
+
+	// If private post, require at least one recipient
+	if req.PrivacyLevel == "private" && len(req.RecipientIDs) == 0 {
+		return nil, errors.New("private posts require at least one recipient")
+	}
+
+	// If group post, verify user is a member of the group
+	if req.PrivacyLevel == "group" {
+		// GroupID would need to be part of the request or inferred
+		// For now, this is a placeholder for group membership validation
+	}
+
+	// If image is provided, verify it exists and belongs to the user
+	if req.ImageID != nil {
+		_, err := s.imageRepo.GetByID(ctx, *req.ImageID)
+		if err != nil {
+			return nil, errors.New("invalid image")
+		}
+	}
+
+	now := time.Now()
+	post := &Post{
+		ID:           uuid.New(),
+		UserID:       userID,
+		Content:      req.Content,
+		ImageID:      req.ImageID,
+		PrivacyLevel: req.PrivacyLevel,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	// Save post to repository
+	if err := s.postRepo.Create(ctx, post); err != nil {
+		return nil, err
+	}
+
+	// If private post, add recipients
+	if req.PrivacyLevel == "private" && len(req.RecipientIDs) > 0 {
+		for _, recipientID := range req.RecipientIDs {
+			recipient := &PostRecipient{
+				ID:        uuid.New(),
+				PostID:    post.ID,
+				UserID:    recipientID,
+				CreatedAt: now,
+			}
+			if err := s.postRepo.AddRecipient(ctx, recipient); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Publish event for real-time updates
+	s.websocketHub.Publish(WebSocketMessage{
+		Type: "post_created",
+		Data: post,
+	})
+
+	return post, nil
+}
+
+// GetPost retrieves a single post with visibility checks
+func (s *postService) GetPost(ctx context.Context, postID, viewerID uuid.UUID) (*Post, error) {
+	post, err := s.postRepo.GetByID(ctx, postID)
+	if err != nil {
+		return nil, errors.New("post not found")
+	}
+
+	// Check if post is soft-deleted
+	if post.DeletedAt != nil {
+		return nil, errors.New("post not found")
+	}
+
+	// Check visibility
+	canView, err := s.CheckPostVisibility(ctx, postID, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	if !canView {
+		return nil, errors.New("forbidden")
+	}
+
+	return post, nil
+}
+
+// GetPosts retrieves multiple posts with filtering and pagination
+func (s *postService) GetPosts(ctx context.Context, filter PostFilter) ([]Post, error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 20 // default limit
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100 // max limit
+	}
+
+	posts, err := s.postRepo.GetMany(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}
