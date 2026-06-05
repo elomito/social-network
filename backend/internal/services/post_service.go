@@ -68,3 +68,35 @@ type PostFilter struct {
 	Limit     int
 	Offset    int
 }
+
+// postService implements the PostService interface
+type postService struct {
+	postRepo        PostRepository
+	commentRepo     CommentRepository
+	reactionRepo    ReactionRepository
+	userRepo        UserRepository
+	imageRepo       ImageRepository
+	groupRepo       GroupRepository
+	websocketHub    WebSocketHub
+}
+
+// NewPostService creates a new post service instance
+func NewPostService(
+	postRepo PostRepository,
+	commentRepo CommentRepository,
+	reactionRepo ReactionRepository,
+	userRepo UserRepository,
+	imageRepo ImageRepository,
+	groupRepo GroupRepository,
+	websocketHub WebSocketHub,
+) PostService {
+	return &postService{
+		postRepo:     postRepo,
+		commentRepo:  commentRepo,
+		reactionRepo: reactionRepo,
+		userRepo:     userRepo,
+		imageRepo:    imageRepo,
+		groupRepo:    groupRepo,
+		websocketHub: websocketHub,
+	}
+}
