@@ -21,3 +21,12 @@ func main() {
 		log.Fatalf("❌ BOOT ERROR: Could not open database connection: %v", err)
 	}
 	defer sqliteConn.Close()
+
+	// 2. Trigger your programmatic migration runner pipeline before starting the server
+	if err := db.RunMigrations(sqliteConn); err != nil {
+		log.Fatalf("❌ BOOT ERROR: Database migration pipeline failed: %v", err)
+	}
+
+	log.Println("🌐 System online! Starting web server listener on port :8080...")
+	// http.ListenAndServe(":8080", nil)
+}
