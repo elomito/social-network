@@ -162,3 +162,30 @@ func (h *postHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(post)
 }
+
+// DeletePost handles DELETE /posts/:id requests
+func (h *postHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
+	// Extract post ID from URL
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+
+	// Extract user ID from context
+	userID, ok := r.Context().Value("user_id").(uuid.UUID)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Delete post via service
+	err = h.postService.DeletePost(r.Context(), postID, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return no content
+	w.WriteHeader(http.StatusNoContent)
+}
