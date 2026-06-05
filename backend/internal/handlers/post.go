@@ -315,3 +315,30 @@ func (h *postHandler) GetComments(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(comments)
 }
+
+// DeleteComment handles DELETE /comments/:id requests
+func (h *postHandler) DeleteComment(w http.ResponseWriter, r *http.Request) {
+	// Extract comment ID from URL
+	commentID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid comment id", http.StatusBadRequest)
+		return
+	}
+
+	// Extract user ID from context
+	userID, ok := r.Context().Value("user_id").(uuid.UUID)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Delete comment via service
+	err = h.postService.DeleteComment(r.Context(), commentID, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return no content
+	w.WriteHeader(http.StatusNoContent)
+}
