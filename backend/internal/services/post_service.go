@@ -473,3 +473,61 @@ func (s *postService) GetPostRecipients(ctx context.Context, postID uuid.UUID) (
 
 	return users, nil
 }
+
+// GetUserFeed generates a personalized feed for a user
+func (s *postService) GetUserFeed(ctx context.Context, userID uuid.UUID, limit, offset int) ([]Post, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// Get posts from users the current user follows
+	following, err := s.userRepo.GetFollowing(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build list of user IDs whose posts should appear in the feed
+	var userIDs []uuid.UUID
+	userIDs = append(userIDs, userID) // Include own posts
+	for _, follow := range following {
+		userIDs = append(userIDs, follow.FollowingID)
+	}
+
+	// Query posts from these users with privacy filtering
+	posts, err := s.postRepo.GetFeedPosts(ctx, userIDs, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}
+
+// GetGroupPosts retrieves posts for a specific group
+func (s *postService) GetGroupPosts(ctx context.Context, groupID, viewerID uuid.UUID, limit, offset int) ([]Post, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// Verify viewer is a member of the group
+	isMember, err := s.groupRepo.IsMember(ctx, groupID, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		return nil, errors.New("forbidden")
+	}
+
+	// Get group posts
+	posts, err := s.postRepo.GetGroupPosts(ctx, groupID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return posts, nil
+}
