@@ -294,3 +294,24 @@ func (h *postHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(comment)
 }
+
+// GetComments handles GET /posts/:id/comments requests
+func (h *postHandler) GetComments(w http.ResponseWriter, r *http.Request) {
+	// Extract post ID from URL
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid post id", http.StatusBadRequest)
+		return
+	}
+
+	// Get comments via service
+	comments, err := h.postService.GetComments(r.Context(), postID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return comments
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(comments)
+}
