@@ -1,7 +1,6 @@
 -- Migration: Create posts table
 -- Purpose: Store user posts
 
-
 CREATE TABLE IF NOT EXISTS posts (
     id                TEXT PRIMARY KEY,   -- UUID stored as TEXT
     author_id         TEXT NOT NULL,
