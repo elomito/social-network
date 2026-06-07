@@ -20,10 +20,10 @@ type Group struct {
 
 // GroupMember represents a user's membership in a group
 type GroupMember struct {
-    ID       uuid.UUID `json:"id" db:"id"`
-    GroupID  uuid.UUID `json:"group_id" db:"group_id"`
-    UserID   uuid.UUID `json:"user_id" db:"user_id"`
-    Role     string    `json:"role" db:"role"`
+    ID       uuid.UUID `json:"id" db:"id" validate:"required"`
+    GroupID  uuid.UUID `json:"group_id" db:"group_id" validate:"required"`
+    UserID   uuid.UUID `json:"user_id" db:"user_id" validate:"required"`
+    Role     string    `json:"role" db:"role" validate:"required,oneof=admin member moderator"`
     JoinedAt time.Time `json:"joined_at" db:"joined_at"`
 }
 
