@@ -94,3 +94,39 @@ func (s *GroupService) GetGroupByID(ctx context.Context, groupID uuid.UUID) (*mo
 	}
 	return &group, nil
 }
+
+// UpdateGroup updates an existing group
+func (s *GroupService) UpdateGroup(ctx context.Context, group *models.Group) error {
+	// Validate input
+	if group.ID == uuid.Nil {
+		return fmt.Errorf("group ID is required")
+	}
+	if group.Title == "" {
+		return fmt.Errorf("group title cannot be empty")
+	}
+
+	// Prepare update
+	group.UpdatedAt = time.Now().UTC()
+
+	// Update group
+	query := `
+		UPDATE groups
+		SET title = :title, description = :description, cover_image_id = :cover_image_id, updated_at = :updated_at
+		WHERE id = :id AND deleted_at IS NULL
+	`
+	result, err := s.db.NamedExecContext(ctx, query, group)
+	if err != nil {
+		return fmt.Errorf("failed to update group: %w", err)
+	}
+
+	// Check if any rows were affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check update result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("group not found or already deleted")
+	}
+
+	return nil
+}
