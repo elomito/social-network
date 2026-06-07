@@ -29,11 +29,11 @@ type GroupMember struct {
 
 // GroupInvitation represents an invitation sent to a user to join a group
 type GroupInvitation struct {
-    ID        uuid.UUID `json:"id" db:"id"`
-    GroupID   uuid.UUID `json:"group_id" db:"group_id"`
-    InviterID uuid.UUID `json:"inviter_id" db:"inviter_id"`
-    InviteeID uuid.UUID `json:"invitee_id" db:"invitee_id"`
-    Status    string    `json:"status" db:"status"`
+    ID        uuid.UUID `json:"id" db:"id" validate:"required"`
+    GroupID   uuid.UUID `json:"group_id" db:"group_id" validate:"required"`
+    InviterID uuid.UUID `json:"inviter_id" db:"inviter_id" validate:"required"`
+    InviteeID uuid.UUID `json:"invitee_id" db:"invitee_id" validate:"required"`
+    Status    string    `json:"status" db:"status" validate:"required,oneof=pending accepted declined"`
     CreatedAt time.Time `json:"created_at" db:"created_at"`
     UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
