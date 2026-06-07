@@ -130,3 +130,33 @@ func (s *GroupService) UpdateGroup(ctx context.Context, group *models.Group) err
 
 	return nil
 }
+
+// DeleteGroup performs a soft delete of a group by setting deleted_at
+func (s *GroupService) DeleteGroup(ctx context.Context, groupID uuid.UUID) error {
+	if groupID == uuid.Nil {
+		return fmt.Errorf("group ID is required")
+	}
+
+	query := `
+		UPDATE groups
+		SET deleted_at = :deleted_at
+		WHERE id = :id AND deleted_at IS NULL
+	`
+	result, err := s.db.NamedExecContext(ctx, query, map[string]interface{}{
+		"id":        groupID,
+		"deleted_at": time.Now().UTC(),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete group: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check delete result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("group not found or already deleted")
+	}
+
+	return nil
+}
