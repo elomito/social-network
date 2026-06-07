@@ -221,3 +221,119 @@ func (s *NotificationService) DeleteNotification(ctx context.Context, notificati
 
 	return nil
 }
+
+// GetNotificationByID retrieves a notification by its ID
+func (s *NotificationService) GetNotificationByID(ctx context.Context, notificationID uuid.UUID) (*models.Notification, error) {
+	query := `
+		SELECT id, recipient_id, initiator_id, type, reference_id, message, is_read, created_at
+		FROM notifications
+		WHERE id = :id
+	`
+	var notification models.Notification
+	err := s.db.GetContext(ctx, &notification, query, map[string]interface{}{"id": notificationID})
+	if err != nil {
+		return nil, err
+	}
+	return &notification, nil
+}
+
+// GetNotificationsByRecipient retrieves notifications for a specific user
+func (s *NotificationService) GetNotificationsByRecipient(ctx context.Context, recipientID uuid.UUID, limit, offset int) ([]*models.Notification, int64, error) {
+	// Count total notifications
+	countQuery := `
+		SELECT COUNT(*)
+		FROM notifications
+		WHERE recipient_id = :recipient_id
+	`
+	var total int64
+	err := s.db.GetContext(ctx, &total, countQuery, map[string]interface{}{"recipient_id": recipientID})
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count notifications: %w", err)
+	}
+
+	// Get notifications with pagination
+	query := `
+		SELECT id, recipient_id, initiator_id, type, reference_id, message, is_read, created_at
+		FROM notifications
+		WHERE recipient_id = :recipient_id
+		ORDER BY created_at DESC
+		LIMIT :limit OFFSET :offset
+	`
+	var notifications []*models.Notification
+	args := map[string]interface{}{
+		"recipient_id": recipientID,
+		"limit":        limit,
+		"offset":       offset,
+	}
+	err = s.db.SelectContext(ctx, &notifications, query, args)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get notifications: %w", err)
+	}
+
+	return notifications, total, nil
+}
+
+// MarkNotificationAsRead marks a notification as read
+func (s *NotificationService) MarkNotificationAsRead(ctx context.Context, notificationID uuid.UUID) error {
+	query := `
+		UPDATE notifications
+		SET is_read = true
+		WHERE id = :id
+	`
+	result, err := s.db.NamedExecContext(ctx, query, map[string]interface{}{"id": notificationID})
+	if err != nil {
+		return fmt.Errorf("failed to mark notification as read: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check update result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("notification not found")
+	}
+
+	return nil
+}
+
+// MarkAllNotificationsAsRead marks all notifications as read for a user
+func (s *NotificationService) MarkAllNotificationsAsRead(ctx context.Context, recipientID uuid.UUID) error {
+	query := `
+		UPDATE notifications
+		SET is_read = true
+		WHERE recipient_id = :recipient_id AND is_read = false
+	`
+	result, err := s.db.NamedExecContext(ctx, query, map[string]interface{}{"recipient_id": recipientID})
+	if err != nil {
+		return fmt.Errorf("failed to mark all notifications as read: %w", err)
+	}
+
+	_, err = result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check update result: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteNotification deletes a notification
+func (s *NotificationService) DeleteNotification(ctx context.Context, notificationID uuid.UUID) error {
+	query := `
+		DELETE FROM notifications
+		WHERE id = :id
+	`
+	result, err := s.db.NamedExecContext(ctx, query, map[string]interface{}{"id": notificationID})
+	if err != nil {
+		return fmt.Errorf("failed to delete notification: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check delete result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("notification not found")
+	}
+
+	return nil
+}
