@@ -40,10 +40,10 @@ type GroupInvitation struct {
 
 // GroupJoinRequest represents a user's request to join a group
 type GroupJoinRequest struct {
-    ID        uuid.UUID `json:"id" db:"id"`
-    GroupID   uuid.UUID `json:"group_id" db:"group_id"`
-    UserID    uuid.UUID `json:"user_id" db:"user_id"`
-    Status    string    `json:"status" db:"status"`
+    ID        uuid.UUID `json:"id" db:"id" validate:"required"`
+    GroupID   uuid.UUID `json:"group_id" db:"group_id" validate:"required"`
+    UserID    uuid.UUID `json:"user_id" db:"user_id" validate:"required"`
+    Status    string    `json:"status" db:"status" validate:"required,oneof=pending approved rejected"`
     CreatedAt time.Time `json:"created_at" db:"created_at"`
     UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
