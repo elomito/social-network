@@ -199,3 +199,25 @@ func (s *NotificationService) MarkAllNotificationsAsRead(ctx context.Context, re
 
 	return nil
 }
+
+// DeleteNotification deletes a notification
+func (s *NotificationService) DeleteNotification(ctx context.Context, notificationID uuid.UUID) error {
+	query := `
+		DELETE FROM notifications
+		WHERE id = :id
+	`
+	result, err := s.db.NamedExecContext(ctx, query, map[string]interface{}{"id": notificationID})
+	if err != nil {
+		return fmt.Errorf("failed to delete notification: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check delete result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("notification not found")
+	}
+
+	return nil
+}
