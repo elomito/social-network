@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -95,6 +94,10 @@ func (s *GroupService) CreateGroup(ctx context.Context, group *models.Group) err
 
 // GetGroupByID retrieves a group by its ID
 func (s *GroupService) GetGroupByID(ctx context.Context, groupID uuid.UUID) (*models.Group, error) {
+	if groupID == uuid.Nil {
+		return nil, fmt.Errorf("group ID is required")
+	}
+
 	query := `
 		SELECT id, title, description, creator_id, cover_image_id, created_at, updated_at, is_active, deleted_at
 		FROM groups
