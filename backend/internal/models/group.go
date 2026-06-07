@@ -7,10 +7,10 @@ import (
 
 // Group represents a user-created group
 type Group struct {
-    ID           uuid.UUID  `json:"id" db:"id"`
-    Title        string     `json:"title" db:"title"`
-    Description  string     `json:"description" db:"description"`
-    CreatorID    uuid.UUID  `json:"creator_id" db:"creator_id"`
+    ID           uuid.UUID  `json:"id" db:"id" validate:"required"`
+    Title        string     `json:"title" db:"title" validate:"required,min=3,max=100"`
+    Description  string     `json:"description" db:"description" validate:"max=500"`
+    CreatorID    uuid.UUID  `json:"creator_id" db:"creator_id" validate:"required"`
     CoverImageID *uuid.UUID `json:"cover_image_id,omitempty" db:"cover_image_id"`
     CreatedAt    time.Time  `json:"created_at" db:"created_at"`
     UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
