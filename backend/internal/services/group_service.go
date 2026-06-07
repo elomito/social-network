@@ -12,6 +12,19 @@ import (
 	"social-network/backend/internal/models"
 )
 
+// GroupFilter contains optional filters for listing groups
+type GroupFilter struct {
+	Title     string
+	CreatorID uuid.UUID
+	IsActive  *bool
+}
+
+// Pagination contains pagination parameters
+type Pagination struct {
+	Limit  int
+	Offset int
+}
+
 // GroupService handles group related operations
 type GroupService struct {
 	db *sqlx.DB
@@ -159,4 +172,61 @@ func (s *GroupService) DeleteGroup(ctx context.Context, groupID uuid.UUID) error
 	}
 
 	return nil
+}
+
+// ListGroups retrieves groups with optional filtering and pagination
+func (s *GroupService) ListGroups(ctx context.Context, filter GroupFilter, pagination Pagination) ([]*models.Group, int64, error) {
+	// Build base query
+	baseQuery := `
+		SELECT id, title, description, creator_id, cover_image_id, created_at, updated_at, is_active, deleted_at
+		FROM groups
+		WHERE deleted_at IS NULL
+	`
+	countQuery := `
+		SELECT COUNT(*)
+		FROM groups
+		WHERE deleted_at IS NULL
+	`
+
+	// Apply filters
+	if filter.Title != "" {
+		baseQuery += " AND title ILIKE :title"
+		countQuery += " AND title ILIKE :title"
+	}
+	if filter.CreatorID != uuid.Nil {
+		baseQuery += " AND creator_id = :creator_id"
+		countQuery += " AND creator_id = :creator_id"
+	}
+	if filter.IsActive != nil {
+		baseQuery += " AND is_active = :is_active"
+		countQuery += " AND is_active = :is_active"
+	}
+
+	// Apply pagination
+	baseQuery += " ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+
+	// Prepare query args
+	args := map[string]interface{}{
+		"title":   "%" + filter.Title + "%",
+		"creator_id": filter.CreatorID,
+		"is_active": filter.IsActive,
+		"limit":   pagination.Limit,
+		"offset":  pagination.Offset,
+	}
+
+	// Execute count query
+	var total int64
+	err := s.db.GetContext(ctx, &total, countQuery, args)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count groups: %w", err)
+	}
+
+	// Execute main query
+	var groups []*models.Group
+	err = s.db.SelectContext(ctx, &groups, baseQuery, args)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list groups: %w", err)
+	}
+
+	return groups, total, nil
 }
