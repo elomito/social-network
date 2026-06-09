@@ -2,10 +2,10 @@
 -- Purpose: Store user posts
 
 CREATE TABLE IF NOT EXISTS posts (
-    id                TEXT PRIMARY KEY,   -- UUID stored as TEXT
+    id                TEXT PRIMARY KEY,
     author_id         TEXT NOT NULL,
     content           TEXT NOT NULL,
-    image_url         TEXT,
+    image_path        TEXT,
     privacy_setting   TEXT NOT NULL CHECK (
         privacy_setting IN (
             'public',
