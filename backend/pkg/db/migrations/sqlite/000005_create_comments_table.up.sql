@@ -2,12 +2,13 @@
 -- Purpose: Store comments on posts
 
 CREATE TABLE IF NOT EXISTS comments (
-    id           TEXT PRIMARY KEY,   -- UUID stored as TEXT
-    post_id      TEXT NOT NULL,
-    author_id    TEXT NOT NULL,
-    content      TEXT NOT NULL,
-    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    id            TEXT PRIMARY KEY,
+    post_id       TEXT NOT NULL,
+    author_id     TEXT NOT NULL,
+    content       TEXT NOT NULL,
+    image_path    TEXT,
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (post_id)
         REFERENCES posts(id)
