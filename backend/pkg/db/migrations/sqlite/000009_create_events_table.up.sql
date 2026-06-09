@@ -2,7 +2,7 @@
 -- Purpose: Store group events
 
 CREATE TABLE IF NOT EXISTS events (
-    id            TEXT PRIMARY KEY,   -- UUID stored as TEXT
+    id            TEXT PRIMARY KEY,
     group_id      TEXT NOT NULL,
     creator_id    TEXT NOT NULL,
     title         TEXT NOT NULL,
