@@ -1,12 +1,14 @@
 -- Migration: Create event_responses table
 -- Purpose: Store event RSVP responses
 
-
 CREATE TABLE IF NOT EXISTS event_responses (
     event_id      TEXT NOT NULL,
     user_id       TEXT NOT NULL,
     status        TEXT NOT NULL CHECK (
-        status IN ('going', 'not_going')
+        status IN (
+            'going',
+            'not_going'
+        )
     ),
     responded_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 
