@@ -1,120 +1,96 @@
 package websocket
 
 import (
+	"log"
 	"sync"
-
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 )
 
-type Message struct {
-	Type      string      `json:"type"`
-	Payload   interface{} `json:"payload,omitempty"`
-	TargetID  *uuid.UUID  `json:"target_id,omitempty"`
-	SenderID  uuid.UUID   `json:"sender_id"`
-	Timestamp int64       `json:"timestamp"`
+// Subscription associates a client with a room
+type Subscription struct {
+	Client *Client
+	Room   string
 }
 
-type Client struct {
-	Hub    *Hub
-	Conn   *websocket.Conn
-	Send   chan Message
-	UserID uuid.UUID
+// Broadcast holds a message destined for a room
+type Broadcast struct {
+	Room    string
+	Message []byte
 }
 
+// Hub maintains active rooms and broadcasts messages to room members.
 type Hub struct {
-	Clients       map[*Client]bool
-	Broadcast     chan Message
-	RegisterChan  chan *Client
-	UnregisterChan chan *Client
-	Mu            sync.RWMutex
-	PrivateConns  map[uuid.UUID]map[*Client]bool
-	GroupConns    map[uuid.UUID]map[*Client]bool
+	mu         sync.RWMutex
+	rooms      map[string]map[*Client]bool
+	register   chan *Subscription
+	unregister chan *Subscription
+	broadcast  chan *Broadcast
 }
 
+// NewHub creates and returns a Hub instance
 func NewHub() *Hub {
 	return &Hub{
-		Clients:       make(map[*Client]bool),
-		Broadcast:     make(chan Message),
-		RegisterChan:  make(chan *Client),
-		UnregisterChan: make(chan *Client),
-		PrivateConns:  make(map[uuid.UUID]map[*Client]bool),
-		GroupConns:    make(map[uuid.UUID]map[*Client]bool),
+		rooms:      make(map[string]map[*Client]bool),
+		register:   make(chan *Subscription),
+		unregister: make(chan *Subscription),
+		broadcast:  make(chan *Broadcast),
 	}
 }
 
+// Run starts the hub loop. Call it as a goroutine.
 func (h *Hub) Run() {
 	for {
 		select {
-		case client := <-h.RegisterChan:
-			h.Mu.Lock()
-			h.Clients[client] = true
-			h.Mu.Unlock()
-
-		case client := <-h.UnregisterChan:
-			h.Mu.Lock()
-			delete(h.Clients, client)
-			if conns, ok := h.PrivateConns[client.UserID]; ok {
-				delete(conns, client)
+		case s := <-h.register:
+			h.mu.Lock()
+			if _, ok := h.rooms[s.Room]; !ok {
+				h.rooms[s.Room] = make(map[*Client]bool)
 			}
-			h.Mu.Unlock()
-			close(client.Send)
-
-		case message := <-h.Broadcast:
-			h.Mu.RLock()
-			switch message.Type {
-			case "private":
-				if message.TargetID != nil {
-					for client := range h.Clients {
-						if client.UserID == *message.TargetID || client.UserID == message.SenderID {
-							select {
-							case client.Send <- message:
-							default:
-							}
-						}
-					}
-				}
-			case "group":
-				if message.TargetID != nil {
-					if conns, ok := h.GroupConns[*message.TargetID]; ok {
-						for client := range conns {
-							select {
-							case client.Send <- message:
-							default:
-							}
-						}
+			h.rooms[s.Room][s.Client] = true
+			h.mu.Unlock()
+		case s := <-h.unregister:
+			h.mu.Lock()
+			if conns, ok := h.rooms[s.Room]; ok {
+				if _, ok2 := conns[s.Client]; ok2 {
+					delete(conns, s.Client)
+					if len(conns) == 0 {
+						delete(h.rooms, s.Room)
 					}
 				}
 			}
-			h.Mu.RUnlock()
+			h.mu.Unlock()
+		case b := <-h.broadcast:
+			h.mu.RLock()
+			conns, ok := h.rooms[b.Room]
+			h.mu.RUnlock()
+			if !ok {
+				log.Printf("no clients in room %s", b.Room)
+				continue
+			}
+			for c := range conns {
+				select {
+				case c.send <- b.Message:
+				default:
+					// slow client; unregister
+					go func(c *Client, room string) {
+						h.unregister <- &Subscription{Client: c, Room: room}
+					}(c, b.Room)
+				}
+			}
 		}
 	}
 }
 
-func (h *Hub) JoinGroup(client *Client, groupID uuid.UUID) {
-	h.Mu.Lock()
-	defer h.Mu.Unlock()
-	if _, ok := h.GroupConns[groupID]; !ok {
-		h.GroupConns[groupID] = make(map[*Client]bool)
-	}
-	h.GroupConns[groupID][client] = true
+// Register subscribes a client to a room
+func (h *Hub) Register(c *Client, room string) {
+	h.register <- &Subscription{Client: c, Room: room}
 }
 
-func (h *Hub) LeaveGroup(client *Client, groupID uuid.UUID) {
-	h.Mu.Lock()
-	defer h.Mu.Unlock()
-	if conns, ok := h.GroupConns[groupID]; ok {
-		delete(conns, client)
-		if len(conns) == 0 {
-			delete(h.GroupConns, groupID)
-		}
-	}
+// Unregister removes a client from a room
+func (h *Hub) Unregister(c *Client, room string) {
+	h.unregister <- &Subscription{Client: c, Room: room}
 }
 
-func (h *Hub) Register(client *Client) {
-	h.RegisterChan <- client
-}
-
-func (h *Hub) Unregister(client *Client) {
-	h.UnregisterChan <- client
+// BroadcastToRoom sends a raw message to all clients in a room
+func (h *Hub) BroadcastToRoom(room string, msg []byte) {
+	h.broadcast <- &Broadcast{Room: room, Message: msg}
 }
