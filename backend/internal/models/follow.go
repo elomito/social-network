@@ -2,6 +2,8 @@ package models
 
 import (
     "time"
+    "errors"
+
     "github.com/google/uuid"
 )
 
@@ -20,4 +22,16 @@ type FollowRequest struct {
     Status      string    `json:"status" db:"status"`
     CreatedAt   time.Time `json:"created_at" db:"created_at"`
     UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// NewFollow constructs a Follow relationship with the current timestamp.
+func NewFollow(followerID, followingID uuid.UUID) (Follow, error) {
+    if followerID == followingID {
+        return Follow{}, errors.New("cannot follow yourself")
+    }
+    return Follow{
+        FollowerID:  followerID,
+        FollowingID: followingID,
+        CreatedAt:   time.Now(),
+    }, nil
 }
