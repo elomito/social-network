@@ -27,3 +27,19 @@ export const LoginPage = {
             </div>
         `;
     },
+// 2. The Logic Engine (Validation & API Integration)
+    init: () => {
+        const form = document.getElementById('login-form');
+        const globalError = document.getElementById('global-error');
+        const submitBtn = document.getElementById('submit-btn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Reset error states
+            globalError.style.display = 'none';
+            document.getElementById('email-error').textContent = '';
+            document.getElementById('password-error').textContent = '';
+
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
