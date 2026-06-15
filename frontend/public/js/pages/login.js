@@ -43,3 +43,21 @@ export const LoginPage = {
 
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
+/ --- Client-side Validation ---
+            let hasError = false;
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            if (!email) {
+                document.getElementById('email-error').textContent = 'Email is strictly required.';
+                hasError = true;
+            } else if (!emailRegex.test(email)) {
+                document.getElementById('email-error').textContent = 'Please provide a valid email address.';
+                hasError = true;
+            }
+
+            if (!password) {
+                document.getElementById('password-error').textContent = 'Password cannot be empty.';
+                hasError = true;
+            }
+
+            if (hasError) return; // Exit if validation fails
