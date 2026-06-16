@@ -14,7 +14,7 @@ import (
 
 // runs in terminal to know it has been connection has been enabled succsesfuly
 func RunMigrations(db *sql.DB) error {
-	log.Println("🔄 [MIGRATION] Starting automatic schema checks...")
+	log.Println("[MIGRATION] Starting automatic schema checks...")
 
 	// tels migaratin engine to accept our sqlite we  are using
 	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
@@ -32,17 +32,17 @@ func RunMigrations(db *sql.DB) error {
 	}
 
 	// 4. migration up is called scans all tables and sees what needs to be updated
-	log.Println("🚀 [MIGRATION] Applying structural table updates...")
+	log.Println("[MIGRATION] Applying structural table updates...")
 	if err := migrator.Up(); err != nil {
 		// It can be hundled safely because no changes to apply
 		if errors.Is(err, migrate.ErrNoChange) {
-			log.Println("✅ [MIGRATION] Database is already completely up to date! No changes needed.")
+			log.Println("[MIGRATION] Database is already completely up to date! No changes needed.")
 			return nil
 		}
 
 		return fmt.Errorf("migration execution failed: %w", err)
 	}
 
-	log.Println("🎉 [MIGRATION] Success! All tables built and verified sequentially.")
+	log.Println("[MIGRATION] Success! All tables built and verified sequentially.")
 	return nil
 }
