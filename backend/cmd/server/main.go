@@ -2,12 +2,12 @@ package main
 
 import (
 	"log"
-	"net/http"
 
-	"backend/internal/handlers"
-	"backend/internal/repository"
-	"backend/internal/services"
+	// 1. Imports our own database package so main.go can use RunMigrations
 	"backend/pkg/db"
+
+	// 2. Registers the SQLite3 driver behind the scenes so sql.Open knows how to work
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
@@ -24,53 +24,14 @@ func main() {
 
 	database, err := db.NewSQLite(dbConfig)
 	if err != nil {
-		log.Fatalf("failed to initialize database: %v", err)
+		log.Fatalf("❌ BOOT ERROR: Could not open database connection: %v", err)
 	}
-	defer database.Close()
+	defer sqliteConn.Close()
 
-	log.Println("database connected")
-
-	// -----------------------------
-	// Initialize repositories
-	// -----------------------------
-
-	eventRepo := repository.NewEventRepository(database.Conn())
-	eventResponseRepo := repository.NewEventResponseRepository(database.Conn())
-
-	// -----------------------------
-	// Initialize services
-	// -----------------------------
-
-	eventService := services.NewEventService(eventRepo, eventResponseRepo)
-
-	// -----------------------------
-	// Initialize handlers
-	// -----------------------------
-
-	eventHandler := handlers.NewEventHandler(eventService)
-
-	// -----------------------------
-	// Set up routes
-	// -----------------------------
-
-	mux := http.NewServeMux()
-
-	// Event routes
-	mux.HandleFunc("POST /events", eventHandler.CreateEvent)
-	mux.HandleFunc("GET /events/{id}", eventHandler.GetEvent)
-	mux.HandleFunc("GET /groups/{id}/events", eventHandler.ListGroupEvents)
-	mux.HandleFunc("PUT /events/{id}", eventHandler.UpdateEvent)
-	mux.HandleFunc("DELETE /events/{id}", eventHandler.DeleteEvent)
-	mux.HandleFunc("POST /events/{id}/responses", eventHandler.CreateEventResponse)
-	mux.HandleFunc("GET /events/{id}/responses", eventHandler.GetEventResponses)
-	mux.HandleFunc("DELETE /events/{id}/responses", eventHandler.DeleteEventResponse)
-
-	// -----------------------------
-	// Start server
-	// -----------------------------
-
-	log.Printf("server starting on %s", serverAddr)
-	if err := http.ListenAndServe(serverAddr, mux); err != nil {
-		log.Fatalf("server failed: %v", err)
+	// 4. Calls your automated script to read SQL files and build tables BEFORE the server turns on
+	if err := db.RunMigrations(sqliteConn); err != nil {
+		log.Fatalf("❌ BOOT ERROR: Database migration pipeline failed: %v", err)
 	}
+
+	log.Println("🌐 System online! Database verification completely successful.")
 }
