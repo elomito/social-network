@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -17,65 +18,130 @@ const (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
 }
 
-// Client represents a websocket connection to the server
 type Client struct {
 	hub    *Hub
 	conn   *websocket.Conn
 	send   chan []byte
-	userID string
+	userID uuid.UUID
+
+	// rooms this client has joined
+	rooms map[uuid.UUID]bool
 }
 
-// ServeWS upgrades the connection and registers the client
-func ServeWS(hub *Hub, w http.ResponseWriter, r *http.Request, userID string) {
+// ServeWS upgrades the connection and starts websocket pumps.
+func ServeWS(
+	hub *Hub,
+	w http.ResponseWriter,
+	r *http.Request,
+	userID uuid.UUID,
+) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("upgrade error:", err)
+		log.Printf("websocket upgrade failed: %v", err)
 		return
 	}
-	c := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), userID: userID}
-	// start pumps
-	go c.writePump()
-	go c.readPump()
+
+	client := &Client{
+		hub:    hub,
+		conn:   conn,
+		send:   make(chan []byte, 256),
+		userID: userID,
+		rooms:  make(map[uuid.UUID]bool),
+	}
+
+	go client.writePump()
+	go client.readPump()
 }
 
 func (c *Client) readPump() {
 	defer func() {
+		// remove client from all joined rooms
+		for roomID := range c.rooms {
+			c.hub.Unregister(c, roomID)
+		}
+
+		close(c.send)
 		c.conn.Close()
 	}()
+
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
 
 	for {
-		_, msg, err := c.conn.ReadMessage()
+		_, data, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("read error: %v", err)
+
+			if websocket.IsUnexpectedCloseError(
+				err,
+				websocket.CloseGoingAway,
+				websocket.CloseAbnormalClosure,
+			) {
+				log.Printf("websocket read error: %v", err)
 			}
+
 			break
 		}
 
-		// try to decode message and route to room
-		var m WSMessage
-		if err := json.Unmarshal(msg, &m); err != nil {
-			log.Println("invalid ws message", err)
+		var msg WSMessage
+
+		if err := json.Unmarshal(data, &msg); err != nil {
+			log.Printf("invalid websocket payload: %v", err)
 			continue
 		}
 
-		// if group id present, register client to that room and broadcast
-		if m.GroupID != "" {
-			// ensure client is registered in the room
-			c.hub.Register(c, m.GroupID)
-			// attach sender id and timestamp
-			if m.SenderID == "" {
-				m.SenderID = c.userID
+		switch msg.Type {
+
+		case "join_group":
+
+			if msg.GroupID == uuid.Nil {
+				continue
 			}
-			m.CreatedAt = time.Now()
-			b, _ := json.Marshal(m)
-			c.hub.BroadcastToRoom(m.GroupID, b)
+
+			if !c.rooms[msg.GroupID] {
+				c.hub.Register(c, msg.GroupID)
+				c.rooms[msg.GroupID] = true
+			}
+
+		case "leave_group":
+
+			if msg.GroupID == uuid.Nil {
+				continue
+			}
+
+			if c.rooms[msg.GroupID] {
+				c.hub.Unregister(c, msg.GroupID)
+				delete(c.rooms, msg.GroupID)
+			}
+
+		case "group_message":
+
+			if msg.GroupID == uuid.Nil {
+				continue
+			}
+
+			msg.SenderID = c.userID
+			msg.CreatedAt = time.Now()
+
+			payload, err := json.Marshal(msg)
+			if err != nil {
+				log.Printf("marshal error: %v", err)
+				continue
+			}
+
+			c.hub.BroadcastToRoom(msg.GroupID, payload)
+
+		default:
+			log.Printf("unknown websocket message type: %s", msg.Type)
 		}
 	}
 }
@@ -86,24 +152,39 @@ func (c *Client) writePump() {
 		ticker.Stop()
 		c.conn.Close()
 	}()
+
 	for {
 		select {
+
 		case message, ok := <-c.send:
+
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+
 			if !ok {
-				// hub closed the channel
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.conn.WriteMessage(
+					websocket.CloseMessage,
+					[]byte{},
+				)
 				return
 			}
-			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+
+			if err := c.conn.WriteMessage(
+				websocket.TextMessage,
+				message,
+			); err != nil {
 				return
 			}
+
 		case <-ticker.C:
+
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+
+			if err := c.conn.WriteMessage(
+				websocket.PingMessage,
+				nil,
+			); err != nil {
 				return
 			}
 		}
 	}
 }
-

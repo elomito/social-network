@@ -14,6 +14,7 @@ import (
 )
 
 func main() {
+<<<<<<< HEAD
 	// -----------------------------
 	// Application configuration
 	// -----------------------------
@@ -26,6 +27,12 @@ func main() {
 	// -----------------------------
 
 	database, err := db.NewSQLite(dbConfig)
+=======
+	log.Println("--- Launching Social Network Core Application ---")
+
+	// 3. Opens or creates our local database file.
+	sqliteConn, err := sql.Open("sqlite3", "./social_network.db")
+>>>>>>> origin/Development
 	if err != nil {
 		log.Fatalf("BOOT ERROR: Could not open database connection: %v", err)
 	}

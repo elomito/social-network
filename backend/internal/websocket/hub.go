@@ -3,94 +3,118 @@ package websocket
 import (
 	"log"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
-// Subscription associates a client with a room
+// Subscription associates a client with a room.
 type Subscription struct {
 	Client *Client
-	Room   string
+	Room   uuid.UUID
 }
 
-// Broadcast holds a message destined for a room
+// Broadcast represents a message destined for a room.
 type Broadcast struct {
-	Room    string
+	Room    uuid.UUID
 	Message []byte
 }
 
-// Hub maintains active rooms and broadcasts messages to room members.
+// Hub manages websocket rooms and broadcasts.
 type Hub struct {
-	mu         sync.RWMutex
-	rooms      map[string]map[*Client]bool
+	mu sync.RWMutex
+
+	rooms map[uuid.UUID]map[*Client]bool
+
 	register   chan *Subscription
 	unregister chan *Subscription
 	broadcast  chan *Broadcast
 }
 
-// NewHub creates and returns a Hub instance
 func NewHub() *Hub {
 	return &Hub{
-		rooms:      make(map[string]map[*Client]bool),
+		rooms:      make(map[uuid.UUID]map[*Client]bool),
 		register:   make(chan *Subscription),
 		unregister: make(chan *Subscription),
 		broadcast:  make(chan *Broadcast),
 	}
 }
 
-// Run starts the hub loop. Call it as a goroutine.
 func (h *Hub) Run() {
 	for {
 		select {
+
 		case s := <-h.register:
+
 			h.mu.Lock()
-			if _, ok := h.rooms[s.Room]; !ok {
+
+			if _, exists := h.rooms[s.Room]; !exists {
 				h.rooms[s.Room] = make(map[*Client]bool)
 			}
+
 			h.rooms[s.Room][s.Client] = true
+
 			h.mu.Unlock()
+
 		case s := <-h.unregister:
+
 			h.mu.Lock()
-			if conns, ok := h.rooms[s.Room]; ok {
-				if _, ok2 := conns[s.Client]; ok2 {
-					delete(conns, s.Client)
-					if len(conns) == 0 {
-						delete(h.rooms, s.Room)
-					}
+
+			if clients, exists := h.rooms[s.Room]; exists {
+
+				delete(clients, s.Client)
+
+				if len(clients) == 0 {
+					delete(h.rooms, s.Room)
 				}
 			}
+
 			h.mu.Unlock()
+
 		case b := <-h.broadcast:
+
 			h.mu.RLock()
-			conns, ok := h.rooms[b.Room]
+			clients, exists := h.rooms[b.Room]
 			h.mu.RUnlock()
-			if !ok {
-				log.Printf("no clients in room %s", b.Room)
+
+			if !exists {
+				log.Printf("room %s has no clients", b.Room)
 				continue
 			}
-			for c := range conns {
+
+			for client := range clients {
+
 				select {
-				case c.send <- b.Message:
+
+				case client.send <- b.Message:
+
 				default:
-					// slow client; unregister
-					go func(c *Client, room string) {
-						h.unregister <- &Subscription{Client: c, Room: room}
-					}(c, b.Room)
+					// slow client
+					go func(c *Client, room uuid.UUID) {
+						h.Unregister(c, room)
+					}(client, b.Room)
 				}
 			}
 		}
 	}
 }
 
-// Register subscribes a client to a room
-func (h *Hub) Register(c *Client, room string) {
-	h.register <- &Subscription{Client: c, Room: room}
+func (h *Hub) Register(c *Client, room uuid.UUID) {
+	h.register <- &Subscription{
+		Client: c,
+		Room:   room,
+	}
 }
 
-// Unregister removes a client from a room
-func (h *Hub) Unregister(c *Client, room string) {
-	h.unregister <- &Subscription{Client: c, Room: room}
+func (h *Hub) Unregister(c *Client, room uuid.UUID) {
+	h.unregister <- &Subscription{
+		Client: c,
+		Room:   room,
+	}
 }
 
-// BroadcastToRoom sends a raw message to all clients in a room
-func (h *Hub) BroadcastToRoom(room string, msg []byte) {
-	h.broadcast <- &Broadcast{Room: room, Message: msg}
+func (h *Hub) BroadcastToRoom(room uuid.UUID, msg []byte) {
+	h.broadcast <- &Broadcast{
+		Room:    room,
+		Message: msg,
+	}
 }
