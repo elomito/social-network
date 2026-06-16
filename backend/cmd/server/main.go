@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
+	"net/http"
 
 	// 1. Imports our own database package so main.go can use RunMigrations
 	"backend/pkg/db"
@@ -27,4 +29,11 @@ func main() {
 	}
 
 	log.Println("System online! Database verification completely successful.")
+
+	serverAddr := ":8080"
+
+	fmt.Println("Starting server on http://localhost", serverAddr)
+	if err := http.ListenAndServe(serverAddr, nil); err != nil {
+		log.Fatal("Error: Failed to initialise server.")
+	}
 }
