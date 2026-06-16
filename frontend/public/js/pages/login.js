@@ -60,4 +60,36 @@ export const LoginPage = {
                 hasError = true;
             }
 
-            if (hasError) return; // Exit if validation fails
+         
+if (hasError) return; // Exit if validation fails
+
+            // --- API Integration & Loading State ---
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Verifying Identity...';
+
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Authentication failed.');
+                }
+
+                console.log('Login successful!', data);
+                window.location.hash = '#feed'; 
+
+            } catch (err) {
+                globalError.textContent = err.message;
+                globalError.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Log In';
+            }
+        });
+    }
+};
