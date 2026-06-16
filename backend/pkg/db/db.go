@@ -1,10 +1,6 @@
 package db
 
 import (
-<<<<<<< HEAD
-	"context"
-=======
->>>>>>> origin/Development
 	"database/sql"
 	"errors"
 	"fmt"
