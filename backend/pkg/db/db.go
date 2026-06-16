@@ -3,102 +3,47 @@ package db
 import (
 	"context"
 	"database/sql"
-	"time"
+	"errors"
+	"fmt"
+	"log"
+
+	// migration tool downloaded
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/sqlite3"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
-// Config defines database-level configuration.
-// This keeps tuning explicit and testable.
-type Config struct {
-	// FilePath is the path to the SQLite .db file
-	FilePath string
+// runs in terminal to know it has been connection has been enabled succsesfuly
+func RunMigrations(db *sql.DB) error {
+	log.Println("[MIGRATION] Starting automatic schema checks...")
 
-	// MaxOpenConns limits concurrent SQLite connections
-	// Critical for avoiding "database is locked" errors
-	// SQLite handles concurrent reads well, but only one writer at a time
-	MaxOpenConns int
-
-	// MaxIdleConns controls how many idle connections
-	// are kept ready for reuse
-	MaxIdleConns int
-
-	// ConnMaxLifetime ensures connections are recycled
-	// to prevent stale locks and file handles
-	ConnMaxLifetime time.Duration
-}
-
-// DefaultConfig returns sensible defaults for SQLite.
-// These values work well for most applications.
-func DefaultConfig(filePath string) Config {
-	return Config{
-		FilePath:        filePath,
-		MaxOpenConns:    10, // Good balance for SQLite
-		MaxIdleConns:    5,  // Keep some connections ready
-		ConnMaxLifetime: time.Hour,
-	}
-}
-
-// HealthChecker defines a minimal contract
-// used by health probes, readiness checks, etc.
-type HealthChecker interface {
-	HealthCheck(ctx context.Context) error
-}
-
-// DB wraps sql.DB to expose only what the app needs.
-// This avoids passing raw *sql.DB everywhere.
-type DB struct {
-	conn *sql.DB
-}
-
-// Conn returns the underlying sql.DB when needed
-func (d *DB) Conn() *sql.DB {
-	return d.conn
-}
-
-// HealthCheck verifies the database is reachable
-// and able to respond within the provided context.
-func (d *DB) HealthCheck(ctx context.Context) error {
-	return d.conn.PingContext(ctx)
-}
-
-// Close cleanly shuts down all connections.
-// Always call this when your application shuts down
-// to release file handles and prevent "database is locked" errors.
-func (d *DB) Close() error {
-	return d.conn.Close()
-}
-
-// NewDB creates a DB wrapper around an existing sql.DB.
-// This is useful for testing or when you need more control.
-func NewDB(conn *sql.DB) *DB {
-	return &DB{conn: conn}
-}
-
-// WithContext runs a function with a context for timeout control.
-// This is a convenience method for operations that need timeouts.
-func (d *DB) WithContext(ctx context.Context, fn func(ctx context.Context) error) error {
-	return fn(ctx)
-}
-
-// Transaction runs a function within a database transaction.
-// If the function returns an error, the transaction is rolled back.
-// If it succeeds, the transaction is committed.
-//
-// Example usage:
-//
-//	err := database.Transaction(ctx, func(ctx context.Context, tx *sql.Tx) error {
-//	    _, err := tx.ExecContext(ctx, "INSERT INTO users ...")
-//	    return err
-//	})
-func (d *DB) Transaction(ctx context.Context, fn func(ctx context.Context, tx *sql.Tx) error) error {
-	tx, err := d.conn.BeginTx(ctx, nil)
+	// tels migaratin engine to accept our sqlite we  are using
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create sqlite3 migration driver: %w", err)
 	}
 
-	if err := fn(ctx, tx); err != nil {
-		_ = tx.Rollback()
-		return err
+	// 2. string a file where a db can be applied changes and done awy with changes
+	migrationFolder := "file://pkg/db/migrations/sqlite"
+
+	// 3. started our migrator engine
+	migrator, err := migrate.NewWithDatabaseInstance(migrationFolder, "sqlite3", driver)
+	if err != nil {
+		return fmt.Errorf("failed to initialize migrator engine: %w", err)
 	}
 
-	return tx.Commit()
+	// 4. migration up is called scans all tables and sees what needs to be updated
+	log.Println("[MIGRATION] Applying structural table updates...")
+	if err := migrator.Up(); err != nil {
+		// It can be hundled safely because no changes to apply
+		if errors.Is(err, migrate.ErrNoChange) {
+			log.Println("[MIGRATION] Database is already completely up to date! No changes needed.")
+			return nil
+		}
+
+		return fmt.Errorf("migration execution failed: %w", err)
+	}
+
+	log.Println("[MIGRATION] Success! All tables built and verified sequentially.")
+	return nil
 }
