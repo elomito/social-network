@@ -7,11 +7,9 @@ import (
 	"net/http"
 
 	"backend/internal/websocket"
-	// 1. Imports our own database package so main.go can use RunMigrations
 	"backend/pkg/db"
 
 	"github.com/google/uuid"
-	// 2. Registers the SQLite3 driver behind the scenes so sql.Open knows how to work
 	_ "github.com/mattn/go-sqlite3"
 )
 
