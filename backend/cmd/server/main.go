@@ -5,7 +5,7 @@ import (
 	"log"
 
 	// 1. Imports our own database package so main.go can use RunMigrations
-	"social-network/pkg/db"
+	"backend/pkg/db"
 
 	// 2. Registers the SQLite3 driver behind the scenes so sql.Open knows how to work
 	_ "github.com/mattn/go-sqlite3"
