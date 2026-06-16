@@ -6,9 +6,11 @@ import (
 	"log"
 	"net/http"
 
+	"backend/internal/websocket"
 	// 1. Imports our own database package so main.go can use RunMigrations
 	"backend/pkg/db"
 
+	"github.com/google/uuid"
 	// 2. Registers the SQLite3 driver behind the scenes so sql.Open knows how to work
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -40,8 +42,31 @@ func main() {
 
 	serverAddr := ":8080"
 
-	fmt.Println("Starting server on http://localhost", serverAddr)
-	if err := http.ListenAndServe(serverAddr, nil); err != nil {
+	mux := http.NewServeMux()
+	hub := websocket.NewHub()
+	go hub.Run()
+	mux.HandleFunc("/ws", handleWebSocket(hub))
+
+	fmt.Printf("Starting server on http://localhost%s\n", serverAddr)
+	fmt.Printf("WebSocket endpoint: ws://localhost%s/ws\n", serverAddr)
+	if err := http.ListenAndServe(serverAddr, mux); err != nil {
 		log.Fatal("Error: Failed to initialise server.")
+	}
+}
+
+func handleWebSocket(hub *websocket.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := uuid.Nil
+		if rawUserID := r.URL.Query().Get("user_id"); rawUserID != "" {
+			parsedUserID, err := uuid.Parse(rawUserID)
+			if err != nil {
+				http.Error(w, "invalid user_id query parameter", http.StatusBadRequest)
+				return
+			}
+
+			userID = parsedUserID
+		}
+
+		websocket.ServeWS(hub, w, r, userID)
 	}
 }
