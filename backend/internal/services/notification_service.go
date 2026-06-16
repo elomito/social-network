@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"social-network/backend/internal/models"
+	"backend/internal/models"
 )
 
 // NotificationService manages notifications

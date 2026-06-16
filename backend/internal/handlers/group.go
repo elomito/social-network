@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"social-network/backend/internal/middleware"
 	"social-network/backend/internal/models"
 	"social-network/backend/internal/services"
 )
@@ -23,10 +24,10 @@ func NewGroupHandler(groupService *services.GroupService) *GroupHandler {
 // -------------------------
 // REQUESTS / RESPONSES
 // -------------------------
+
 type CreateGroupRequest struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
-	CreatorID   string `json:"creator_id"`
 }
 
 type UpdateGroupRequest struct {
@@ -53,6 +54,7 @@ type GetGroupResponse struct {
 // -------------------------
 // HELPERS
 // -------------------------
+
 func encodeError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
@@ -66,9 +68,23 @@ func pathParam(r *http.Request, key string) string {
 // -------------------------
 // CREATE GROUP
 // -------------------------
+
 func (h *GroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// AUTHENTICATED USER (from middleware)
+	userIDStr := middleware.GetUserID(r)
+	if userIDStr == "" {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	creatorID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
 		return
 	}
 
@@ -78,9 +94,8 @@ func (h *GroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	creatorID, err := uuid.Parse(req.CreatorID)
-	if err != nil {
-		http.Error(w, "invalid creator ID", http.StatusBadRequest)
+	if req.Title == "" {
+		http.Error(w, "title is required", http.StatusBadRequest)
 		return
 	}
 
@@ -104,6 +119,7 @@ func (h *GroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 // -------------------------
 // GET GROUP
 // -------------------------
+
 func (h *GroupHandler) GetGroupByID(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -140,6 +156,7 @@ func (h *GroupHandler) GetGroupByID(w http.ResponseWriter, r *http.Request) {
 // -------------------------
 // UPDATE GROUP
 // -------------------------
+
 func (h *GroupHandler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -187,6 +204,7 @@ func (h *GroupHandler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 // -------------------------
 // DELETE GROUP
 // -------------------------
+
 func (h *GroupHandler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -210,6 +228,7 @@ func (h *GroupHandler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 // -------------------------
 // LIST GROUPS
 // -------------------------
+
 func (h *GroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -241,8 +260,8 @@ func (h *GroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 
 	var isActive *bool
 	if isActiveStr != "" {
-		val := isActiveStr == "true"
-		isActive = &val
+		v := isActiveStr == "true"
+		isActive = &v
 	}
 
 	groups, total, err := h.groupService.ListGroups(

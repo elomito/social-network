@@ -2,15 +2,19 @@ package services
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 
-	"social-network/backend/internal/models"
+	_ "github.com/mattn/go-sqlite3"
+
+	"backend/internal/models"
+	ws "backend/internal/websocket"
 )
 
 type rateLimitEntry struct {
@@ -19,30 +23,53 @@ type rateLimitEntry struct {
 }
 
 type ChatService struct {
-	db           *sqlx.DB
+	db           *sql.DB
+	hub          *ws.Hub
 	rateLimiter  map[uuid.UUID]*rateLimitEntry
 	rateMu       sync.Mutex
 	rateInterval time.Duration
 	rateLimit    int
 }
 
-func NewChatService(db *sqlx.DB) *ChatService {
+func NewChatService(db *sql.DB, hub *ws.Hub) *ChatService {
 	return &ChatService{
 		db:           db,
+		hub:          hub,
 		rateLimiter:  make(map[uuid.UUID]*rateLimitEntry),
 		rateInterval: time.Minute,
 		rateLimit:    30,
 	}
 }
 
+//
+// -------------------------
+// SQLITE HELPER (EXISTS)
+// -------------------------
+//
+
+func (s *ChatService) exists(ctx context.Context, query string, args ...any) (bool, error) {
+	var exists bool
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+//
+// -------------------------
+// RATE LIMIT
+// -------------------------
+//
+
 func (s *ChatService) checkRateLimit(userID uuid.UUID) bool {
 	s.rateMu.Lock()
 	defer s.rateMu.Unlock()
 
 	now := time.Now()
-	entry, exists := s.rateLimiter[userID]
+	entry, ok := s.rateLimiter[userID]
 
-	if !exists || now.After(entry.resetTime) {
+	if !ok || now.After(entry.resetTime) {
 		s.rateLimiter[userID] = &rateLimitEntry{
 			count:     1,
 			resetTime: now.Add(s.rateInterval),
@@ -58,39 +85,67 @@ func (s *ChatService) checkRateLimit(userID uuid.UUID) bool {
 	return true
 }
 
+//
+// -------------------------
+// VALIDATION
+// -------------------------
+//
+
 func (s *ChatService) validateUserExists(ctx context.Context, userID uuid.UUID) error {
-	var exists bool
-	err := s.db.GetContext(ctx, &exists, "SELECT COUNT(1) > 0 FROM users WHERE id = ? AND deleted_at IS NULL", userID)
+	ok, err := s.exists(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM users
+			WHERE id = ? AND deleted_at IS NULL
+		)
+	`, userID)
+
 	if err != nil {
 		return fmt.Errorf("failed to validate user: %w", err)
 	}
-	if !exists {
+	if !ok {
 		return errors.New("user not found")
 	}
 	return nil
 }
 
 func (s *ChatService) validateGroupMembership(ctx context.Context, userID, groupID uuid.UUID) error {
-	var exists bool
-	err := s.db.GetContext(ctx, &exists, `
-		SELECT COUNT(1) > 0 
-		FROM group_members gm
-		JOIN groups g ON gm.group_id = g.id
-		WHERE gm.user_id = ? AND gm.group_id = ? AND g.deleted_at IS NULL AND g.is_active = true
+	ok, err := s.exists(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM group_members gm
+			JOIN groups g ON gm.group_id = g.id
+			WHERE gm.user_id = ?
+			AND gm.group_id = ?
+			AND g.deleted_at IS NULL
+			AND g.is_active = 1
+		)
 	`, userID, groupID)
+
 	if err != nil {
 		return fmt.Errorf("failed to validate group membership: %w", err)
 	}
-	if !exists {
+	if !ok {
 		return errors.New("user is not a member of this group")
 	}
 	return nil
 }
 
-func (s *ChatService) SendPrivateMessage(ctx context.Context, senderID, recipientID uuid.UUID, content string) (*models.PrivateMessage, error) {
+//
+// -------------------------
+// PRIVATE MESSAGE
+// -------------------------
+//
+
+func (s *ChatService) SendPrivateMessage(
+	ctx context.Context,
+	senderID, recipientID uuid.UUID,
+	content string,
+) (*models.PrivateMessage, error) {
+
 	if content == "" {
 		return nil, errors.New("message content cannot be empty")
 	}
+
 	if senderID == recipientID {
 		return nil, errors.New("cannot send message to yourself")
 	}
@@ -112,18 +167,38 @@ func (s *ChatService) SendPrivateMessage(ctx context.Context, senderID, recipien
 		CreatedAt:   time.Now().UTC(),
 	}
 
-	query := `
-		INSERT INTO private_messages (id, sender_id, recipient_id, content, is_read, created_at)
-		VALUES (:id, :sender_id, :recipient_id, :content, :is_read, :created_at)
-	`
-	if _, err := s.db.NamedExecContext(ctx, query, msg); err != nil {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO private_messages
+		(id, sender_id, recipient_id, content, is_read, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`,
+		msg.ID,
+		msg.SenderID,
+		msg.RecipientID,
+		msg.Content,
+		msg.IsRead,
+		msg.CreatedAt,
+	)
+
+	if err != nil {
 		return nil, fmt.Errorf("failed to send private message: %w", err)
 	}
 
 	return msg, nil
 }
 
-func (s *ChatService) SendGroupMessage(ctx context.Context, senderID, groupID uuid.UUID, content string) (*models.GroupMessage, error) {
+//
+// -------------------------
+// GROUP MESSAGE
+// -------------------------
+//
+
+func (s *ChatService) SendGroupMessage(
+	ctx context.Context,
+	senderID, groupID uuid.UUID,
+	content string,
+) (*models.GroupMessage, error) {
+
 	if content == "" {
 		return nil, errors.New("message content cannot be empty")
 	}
@@ -144,65 +219,81 @@ func (s *ChatService) SendGroupMessage(ctx context.Context, senderID, groupID uu
 		CreatedAt: time.Now().UTC(),
 	}
 
-	query := `
-		INSERT INTO group_messages (id, group_id, sender_id, content, created_at)
-		VALUES (:id, :group_id, :sender_id, :content, :created_at)
-	`
-	if _, err := s.db.NamedExecContext(ctx, query, msg); err != nil {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO group_messages
+		(id, group_id, sender_id, content, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`,
+		msg.ID,
+		msg.GroupID,
+		msg.SenderID,
+		msg.Content,
+		msg.CreatedAt,
+	)
+
+	if err != nil {
 		return nil, fmt.Errorf("failed to send group message: %w", err)
+	}
+
+	// WebSocket broadcast
+	if s.hub != nil {
+		payload := ws.WSMessage{
+			Type:      "group_message",
+			SenderID:  senderID,
+			GroupID:   groupID,
+			Content:   content,
+			CreatedAt: msg.CreatedAt,
+		}
+
+		b, _ := json.Marshal(payload)
+		s.hub.BroadcastToRoom(groupID.String(), b)
 	}
 
 	return msg, nil
 }
 
-func (s *ChatService) GetPrivateMessageHistory(ctx context.Context, userID1, userID2 uuid.UUID, limit, offset int) ([]*models.PrivateMessage, error) {
-	query := `
-		SELECT id, sender_id, recipient_id, content, is_read, created_at
-		FROM private_messages
-		WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)
-		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
-	`
-	var messages []*models.PrivateMessage
-	if err := s.db.SelectContext(ctx, &messages, query, userID1, userID2, userID2, userID1, limit, offset); err != nil {
-		return nil, fmt.Errorf("failed to get private message history: %w", err)
-	}
-	return messages, nil
-}
+//
+// -------------------------
+// HISTORY (SQLite-safe ordering)
+// -------------------------
+//
 
-func (s *ChatService) GetGroupMessageHistory(ctx context.Context, groupID uuid.UUID, limit, offset int) ([]*models.GroupMessage, error) {
-	query := `
+func (s *ChatService) GetGroupMessageHistory(
+	ctx context.Context,
+	groupID uuid.UUID,
+	limit, offset int,
+) ([]*models.GroupMessage, error) {
+
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, group_id, sender_id, content, created_at
 		FROM group_messages
 		WHERE group_id = ?
-		ORDER BY created_at DESC
+		ORDER BY datetime(created_at) ASC, id ASC
 		LIMIT ? OFFSET ?
-	`
-	var messages []*models.GroupMessage
-	if err := s.db.SelectContext(ctx, &messages, query, groupID, limit, offset); err != nil {
+	`, groupID, limit, offset)
+
+	if err != nil {
 		return nil, fmt.Errorf("failed to get group message history: %w", err)
 	}
+	defer rows.Close()
+
+	var messages []*models.GroupMessage
+
+	for rows.Next() {
+		var m models.GroupMessage
+
+		if err := rows.Scan(
+			&m.ID,
+			&m.GroupID,
+			&m.SenderID,
+			&m.Content,
+			&m.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		messages = append(messages, &m)
+	}
+
 	return messages, nil
-}
-
-func (s *ChatService) MarkPrivateMessageAsRead(ctx context.Context, messageID, userID uuid.UUID) error {
-	query := `
-		UPDATE private_messages
-		SET is_read = true
-		WHERE id = ? AND recipient_id = ?
-	`
-	result, err := s.db.ExecContext(ctx, query, messageID, userID)
-	if err != nil {
-		return fmt.Errorf("failed to mark message as read: %w", err)
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check update result: %w", err)
-	}
-	if rows == 0 {
-		return errors.New("message not found or not authorized to mark as read")
-	}
-
-	return nil
 }
