@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Social Network Auth</title>
+    <link rel="stylesheet" href="/css/reset.css">
+    <link rel="stylesheet" href="/css/main.css">
+  </head>
+  <body>
+    <main class="auth-shell">
+      <section class="auth-panel">
+        <div class="brand-block">
+          <p class="eyebrow">Social Network</p>
+          <h1>Create your account</h1>
+          <p class="lede">Join the conversation with a profile that is ready for posts, groups, and private updates.</p>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Authentication">
+          <button class="tab is-active" type="button" data-auth-tab="register">Register</button>
+          <button class="tab" type="button" data-auth-tab="login">Login</button>
+        </div>
+
+        <form id="register-form" class="auth-form" novalidate>
+          <div class="form-grid">
+            <label>
+              <span>First name</span>
+              <input name="first_name" autocomplete="given-name" required>
+              <small class="field-error" data-error-for="first_name"></small>
+            </label>
+            <label>
+              <span>Last name</span>
+              <input name="last_name" autocomplete="family-name" required>
+              <small class="field-error" data-error-for="last_name"></small>
+            </label>
+          </div>
+
+          <label>
+            <span>Email</span>
+            <input name="email" type="email" autocomplete="email" required>
+            <small class="field-error" data-error-for="email"></small>
+          </label>
+
+          <label>
+            <span>Date of birth</span>
+            <input name="date_of_birth" type="date" required>
+            <small class="field-error" data-error-for="date_of_birth"></small>
+          </label>
+
+          <label>
+            <span>Password</span>
+            <input name="password" type="password" autocomplete="new-password" required>
+            <small class="field-error" data-error-for="password"></small>
+          </label>
+
+          <ul class="password-rules" aria-live="polite">
+            <li data-rule="length">At least 8 characters</li>
+            <li data-rule="upper">One uppercase letter</li>
+            <li data-rule="lower">One lowercase letter</li>
+            <li data-rule="number">One number</li>
+          </ul>
+
+          <label>
+            <span>Nickname</span>
+            <input name="nickname" autocomplete="nickname">
+          </label>
+
+          <label>
+            <span>About me</span>
+            <textarea name="about_me" rows="3"></textarea>
+          </label>
+
+          <label class="check-row">
+            <input name="is_public" type="checkbox" checked>
+            <span>Make my profile public</span>
+          </label>
+
+          <p class="form-message" data-form-message="register"></p>
+          <button class="primary-action" type="submit">Create account</button>
+        </form>
+
+        <form id="login-form" class="auth-form is-hidden" novalidate>
+          <label>
+            <span>Email</span>
+            <input name="email" type="email" autocomplete="email" required>
+            <small class="field-error" data-error-for="login-email"></small>
+          </label>
+
+          <label>
+            <span>Password</span>
+            <input name="password" type="password" autocomplete="current-password" required>
+            <small class="field-error" data-error-for="login-password"></small>
+          </label>
+
+          <p class="form-message" data-form-message="login"></p>
+          <button class="primary-action" type="submit">Login</button>
+        </form>
+      </section>
+
+      <section id="dashboard" class="dashboard is-hidden">
+        <p class="eyebrow">Signed in</p>
+        <h2>Welcome back</h2>
+        <p>Your account is ready. The feed can take over from here when that page is built out.</p>
+        <button id="logout-button" class="secondary-action" type="button">Logout</button>
+      </section>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/utils/form.js"></script>
+    <script src="/js/pages/register.js"></script>
+    <script src="/js/pages/login.js"></script>
+    <script src="/js/app.js"></script>
+  </body>
+</html>
