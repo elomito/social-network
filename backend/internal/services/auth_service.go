@@ -57,3 +57,26 @@ func StartSession(db *sql.DB, userIDStr string) (*models.Session, error) {
 
 	return session, nil
 }
+// GetSessionFromDB retrieves a session from the DB for validation
+func GetSessionFromDB(db *sql.DB, idStr string) (*models.Session, error) {
+	query := `SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?`
+	row := db.QueryRow(query, idStr)
+
+	var s models.Session
+	var id, userID string
+	err := row.Scan(&id, &userID, &s.ExpiresAt, &s.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	s.ID, err = uuid.Parse(id)
+	if err != nil {
+		return nil, err
+	}
+	s.UserID, err = uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &s, nil
+}
