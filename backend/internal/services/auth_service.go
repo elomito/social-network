@@ -30,3 +30,30 @@ func AuthenticateUser(db *sql.DB, email, password string) (string, error) {
 
 	return userID, nil
 }
+// StartSession creates a session entry in the database using the team's struct
+func StartSession(db *sql.DB, userIDStr string) (*models.Session, error) {
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return nil, err
+	}
+
+	sessionID, err := uuid.NewRandom()
+	if err != nil {
+		return nil, err
+	}
+
+	session := &models.Session{
+		ID:        sessionID,
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+
+	query := `INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)`
+	_, err = db.Exec(query, session.ID.String(), session.UserID.String(), session.ExpiresAt, session.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return session, nil
+}
