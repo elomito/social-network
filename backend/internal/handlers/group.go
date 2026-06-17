@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"social-network/backend/internal/middleware"
-	"social-network/backend/internal/models"
-	"social-network/backend/internal/services"
+	"backend/internal/middleware"
+	"backend/internal/models"
+	"backend/internal/services"
 )
 
 type GroupHandler struct {

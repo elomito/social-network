@@ -7,9 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/jmoiron/sqlx"
-	"social-network/backend/internal/models"
-	"social-network/backend/internal/websocket"
+	"backend/internal/models"
+	"backend/internal/websocket"
 )
 
 var upgrader = websocket.Upgrader{
