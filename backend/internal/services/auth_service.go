@@ -80,3 +80,8 @@ func GetSessionFromDB(db *sql.DB, idStr string) (*models.Session, error) {
 
 	return &s, nil
 }
+func KillSession(db *sql.DB, idStr string) error {
+	query := `DELETE FROM sessions WHERE id = ?`
+	_, err := db.Exec(query, idStr)
+	return err
+}
