@@ -52,3 +52,23 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		json.NewEncoder(w).Encode(map[string]string{"message": "Login successful"})
 	}
 }
+func LogoutHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("session_id")
+		if err == nil {
+			_ = services.KillSession(db, cookie.Value)
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session_id",
+			Value:    "",
+			Expires:  time.Now().Add(-1 * time.Hour),
+			HttpOnly: true,
+			Path:     "/",
+			SameSite: http.SameSiteLaxMode,
+		})
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Logout successful"})
+	}
+}
