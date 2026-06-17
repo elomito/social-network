@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"backend/pkg/services"
+	"backend/internal/services" // Matches your internal structure
 )
 
 type LoginRequest struct {
