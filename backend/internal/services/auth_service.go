@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"backend/pkg/models"
+	"backend/internal/models" // 
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
