@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 
+	"backend/internal/handlers"
+	"backend/internal/middleware"
 	"backend/internal/websocket"
 	"backend/pkg/db"
 
@@ -36,10 +38,15 @@ func main() {
 	hub := websocket.NewHub()
 	go hub.Run()
 	mux.HandleFunc("/ws", handleWebSocket(hub))
+	mux.HandleFunc("/api/auth/register", handlers.RegisterHandler(sqliteConn))
+	mux.HandleFunc("/api/auth/login", handlers.LoginHandler(sqliteConn))
+	mux.HandleFunc("/api/auth/logout", handlers.LogoutHandler(sqliteConn))
+	mux.HandleFunc("/api/auth/me", handlers.MeHandler(sqliteConn))
+	mux.Handle("/", http.FileServer(http.Dir("../frontend/public")))
 
 	fmt.Printf("Starting server on http://localhost%s\n", serverAddr)
 	fmt.Printf("WebSocket endpoint: ws://localhost%s/ws\n", serverAddr)
-	if err := http.ListenAndServe(serverAddr, mux); err != nil {
+	if err := http.ListenAndServe(serverAddr, middleware.DefaultCORS(mux)); err != nil {
 		log.Fatal("Error: Failed to initialise server.")
 	}
 }
