@@ -1,7 +1,9 @@
 package models
 
 import (
+    "errors"
     "time"
+
     "github.com/google/uuid"
 )
 
@@ -46,4 +48,35 @@ type GroupJoinRequest struct {
     Status    string    `json:"status" db:"status" validate:"required,oneof=pending approved rejected"`
     CreatedAt time.Time `json:"created_at" db:"created_at"`
     UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// NewGroup constructs a Group with sensible defaults.
+func NewGroup(creatorID uuid.UUID, title, description string) (Group, error) {
+    g := Group{
+        ID:          uuid.New(),
+        Title:       title,
+        Description: description,
+        CreatorID:   creatorID,
+        CreatedAt:   time.Now(),
+        UpdatedAt:   time.Now(),
+        IsActive:    true,
+    }
+    if err := g.Validate(); err != nil {
+        return Group{}, err
+    }
+    return g, nil
+}
+
+// Validate checks minimal invariants for a Group.
+func (g *Group) Validate() error {
+    if g.Title == "" {
+        return errors.New("title is required")
+    }
+    if len(g.Title) > 200 {
+        return errors.New("title is too long")
+    }
+    if len(g.Description) > 2000 {
+        return errors.New("description is too long")
+    }
+    return nil
 }

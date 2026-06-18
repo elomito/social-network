@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"social-network/backend/internal/models"
+	"backend/internal/models"
 )
 
 var (
@@ -26,9 +26,7 @@ func NewGroupService(db *sql.DB) *GroupService {
 	return &GroupService{db: db}
 }
 
-// -------------------------
 // CREATE GROUP
-// -------------------------
 func (s *GroupService) CreateGroup(ctx context.Context, group *models.Group) error {
 	if group.Title == "" {
 		return errors.New("group title cannot be empty")
@@ -53,7 +51,6 @@ func (s *GroupService) CreateGroup(ctx context.Context, group *models.Group) err
 		coverImageID = group.CoverImageID.String()
 	}
 
-	// Insert group
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO groups (
 			id, title, description, creator_id, cover_image_id,
@@ -74,7 +71,7 @@ func (s *GroupService) CreateGroup(ctx context.Context, group *models.Group) err
 		return err
 	}
 
-	// Creator becomes admin
+	// creator becomes admin
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO group_members (
 			id, group_id, user_id, role, joined_at
@@ -94,9 +91,7 @@ func (s *GroupService) CreateGroup(ctx context.Context, group *models.Group) err
 	return tx.Commit()
 }
 
-// -------------------------
 // GET GROUP
-// -------------------------
 func (s *GroupService) GetGroupByID(ctx context.Context, groupID uuid.UUID) (*models.Group, error) {
 	if groupID == uuid.Nil {
 		return nil, errors.New("group ID is required")
@@ -142,9 +137,7 @@ func (s *GroupService) GetGroupByID(ctx context.Context, groupID uuid.UUID) (*mo
 	return &group, nil
 }
 
-// -------------------------
 // UPDATE GROUP
-// -------------------------
 func (s *GroupService) UpdateGroup(ctx context.Context, group *models.Group) error {
 	if group.ID == uuid.Nil {
 		return errors.New("group ID is required")
@@ -186,9 +179,7 @@ func (s *GroupService) UpdateGroup(ctx context.Context, group *models.Group) err
 	return nil
 }
 
-// -------------------------
-// DELETE GROUP (soft)
-// -------------------------
+// DELETE GROUP
 func (s *GroupService) DeleteGroup(ctx context.Context, groupID uuid.UUID) error {
 	if groupID == uuid.Nil {
 		return errors.New("group ID is required")
@@ -217,9 +208,7 @@ func (s *GroupService) DeleteGroup(ctx context.Context, groupID uuid.UUID) error
 	return nil
 }
 
-// -------------------------
 // MEMBERSHIP CHECK
-// -------------------------
 func (s *GroupService) IsMember(ctx context.Context, userID, groupID uuid.UUID) (bool, error) {
 	var count int
 
@@ -236,9 +225,7 @@ func (s *GroupService) IsMember(ctx context.Context, userID, groupID uuid.UUID) 
 	return count > 0, nil
 }
 
-// -------------------------
 // JOIN GROUP
-// -------------------------
 func (s *GroupService) JoinGroup(ctx context.Context, userID, groupID uuid.UUID) error {
 	var isActive bool
 
@@ -260,7 +247,6 @@ func (s *GroupService) JoinGroup(ctx context.Context, userID, groupID uuid.UUID)
 		return ErrGroupNotFound
 	}
 
-	// rely on UNIQUE constraint (recommended)
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO group_members (
 			id, group_id, user_id, role, joined_at
@@ -281,9 +267,7 @@ func (s *GroupService) JoinGroup(ctx context.Context, userID, groupID uuid.UUID)
 	return nil
 }
 
-// -------------------------
 // LEAVE GROUP
-// -------------------------
 func (s *GroupService) LeaveGroup(ctx context.Context, userID, groupID uuid.UUID) error {
 	var creatorID string
 
@@ -318,7 +302,6 @@ func (s *GroupService) LeaveGroup(ctx context.Context, userID, groupID uuid.UUID
 	if err != nil {
 		return err
 	}
-
 	if rows == 0 {
 		return ErrNotMember
 	}

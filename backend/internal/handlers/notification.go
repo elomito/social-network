@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-	"social-network/backend/internal/models"
-	"social-network/backend/internal/services"
+	"backend/internal/models"
+	"backend/internal/services"
 )
 
 // CreateNotificationHandler expects JSON body with recipient_id, type, reference_id, message, optional initiator_id

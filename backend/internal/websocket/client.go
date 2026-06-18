@@ -2,8 +2,11 @@ package websocket
 
 import (
 	"encoding/json"
+	"log"
+	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -14,72 +17,172 @@ const (
 	maxMessageSize = 5120
 )
 
-func (c *Client) ReadPump() {
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+type Client struct {
+	hub    *Hub
+	conn   *websocket.Conn
+	send   chan []byte
+	userID uuid.UUID
+
+	// rooms this client has joined
+	rooms map[uuid.UUID]bool
+}
+
+// ServeWS upgrades the connection and starts websocket pumps.
+func ServeWS(
+	hub *Hub,
+	w http.ResponseWriter,
+	r *http.Request,
+	userID uuid.UUID,
+) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("websocket upgrade failed: %v", err)
+		return
+	}
+
+	client := &Client{
+		hub:    hub,
+		conn:   conn,
+		send:   make(chan []byte, 256),
+		userID: userID,
+		rooms:  make(map[uuid.UUID]bool),
+	}
+
+	go client.writePump()
+	go client.readPump()
+}
+
+func (c *Client) readPump() {
 	defer func() {
-		c.Hub.Unregister(c)
-		c.Conn.Close()
+		// remove client from all joined rooms
+		for roomID := range c.rooms {
+			c.hub.Unregister(c, roomID)
+		}
+
+		close(c.send)
+		c.conn.Close()
 	}()
 
-	c.Conn.SetReadLimit(maxMessageSize)
-	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
 
 	for {
-		_, message, err := c.Conn.ReadMessage()
+		_, data, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-				return
+
+			if websocket.IsUnexpectedCloseError(
+				err,
+				websocket.CloseGoingAway,
+				websocket.CloseAbnormalClosure,
+			) {
+				log.Printf("websocket read error: %v", err)
 			}
+
 			break
 		}
 
-		var msg Message
-		if err := json.Unmarshal(message, &msg); err != nil {
+		var msg WSMessage
+
+		if err := json.Unmarshal(data, &msg); err != nil {
+			log.Printf("invalid websocket payload: %v", err)
 			continue
 		}
 
-		msg.SenderID = c.UserID
-		msg.Timestamp = time.Now().Unix()
+		switch msg.Type {
 
-		c.Hub.Broadcast <- msg
+		case "join_group":
+
+			if msg.GroupID == uuid.Nil {
+				continue
+			}
+
+			if !c.rooms[msg.GroupID] {
+				c.hub.Register(c, msg.GroupID)
+				c.rooms[msg.GroupID] = true
+			}
+
+		case "leave_group":
+
+			if msg.GroupID == uuid.Nil {
+				continue
+			}
+
+			if c.rooms[msg.GroupID] {
+				c.hub.Unregister(c, msg.GroupID)
+				delete(c.rooms, msg.GroupID)
+			}
+
+		case "group_message":
+
+			if msg.GroupID == uuid.Nil {
+				continue
+			}
+
+			msg.SenderID = c.userID
+			msg.CreatedAt = time.Now()
+
+			payload, err := json.Marshal(msg)
+			if err != nil {
+				log.Printf("marshal error: %v", err)
+				continue
+			}
+
+			c.hub.BroadcastToRoom(msg.GroupID, payload)
+
+		default:
+			log.Printf("unknown websocket message type: %s", msg.Type)
+		}
 	}
 }
 
-func (c *Client) WritePump() {
+func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.Conn.Close()
+		c.conn.Close()
 	}()
 
 	for {
 		select {
-		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+
+		case message, ok := <-c.send:
+
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+
 			if !ok {
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.conn.WriteMessage(
+					websocket.CloseMessage,
+					[]byte{},
+				)
 				return
 			}
 
-			w, err := c.Conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				return
-			}
-
-			if err := json.NewEncoder(w).Encode(message); err != nil {
-				return
-			}
-
-			if err := w.Close(); err != nil {
+			if err := c.conn.WriteMessage(
+				websocket.TextMessage,
+				message,
+			); err != nil {
 				return
 			}
 
 		case <-ticker.C:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+
+			if err := c.conn.WriteMessage(
+				websocket.PingMessage,
+				nil,
+			); err != nil {
 				return
 			}
 		}
