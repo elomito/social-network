@@ -18,3 +18,17 @@ const validateForm = () => {
     }
     return true;
   };
+const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!validateForm()) return;
+    setLoading(true);
+
+    try {
+      // API Integration matching your Go backend setup
+      const response = await fetch('http://localhost:8080/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
