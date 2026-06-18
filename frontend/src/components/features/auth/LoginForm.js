@@ -37,3 +37,13 @@ const data = await response.json();
       if (!response.ok) {
         throw new Error(data.message || 'Invalid email or password.');
       }
+// Store token on success & redirect
+      document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
+      window.location.href = '/feed'; // Team's dashboard route
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
