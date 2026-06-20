@@ -85,16 +85,19 @@ var legacySchemaColumns = []schemaColumn{
 	{table: "group_invitations", name: "updated_at", definition: "updated_at TEXT NOT NULL DEFAULT (datetime('now'))"},
 
 	{table: "events", name: "group_id", definition: "group_id TEXT NOT NULL"},
-	{table: "events", name: "creator_id", definition: "creator_id TEXT NOT NULL"},
+	{table: "events", name: "created_by", definition: "created_by TEXT NOT NULL"},
 	{table: "events", name: "title", definition: "title TEXT NOT NULL"},
 	{table: "events", name: "description", definition: "description TEXT NOT NULL"},
-	{table: "events", name: "event_time", definition: "event_time DATETIME NOT NULL"},
+	{table: "events", name: "date_time", definition: "date_time DATETIME NOT NULL"},
 	{table: "events", name: "created_at", definition: "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
+	{table: "events", name: "updated_at", definition: "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
 
+	{table: "event_responses", name: "id", definition: "id TEXT NOT NULL"},
 	{table: "event_responses", name: "event_id", definition: "event_id TEXT NOT NULL"},
 	{table: "event_responses", name: "user_id", definition: "user_id TEXT NOT NULL"},
-	{table: "event_responses", name: "status", definition: "status TEXT NOT NULL DEFAULT 'not_going' CHECK (status IN ('going','not_going'))"},
-	{table: "event_responses", name: "responded_at", definition: "responded_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
+	{table: "event_responses", name: "response", definition: "response TEXT NOT NULL CHECK (response IN ('going','not_going','maybe'))"},
+	{table: "event_responses", name: "created_at", definition: "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
+	{table: "event_responses", name: "updated_at", definition: "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
 
 	{table: "private_messages", name: "sender_id", definition: "sender_id TEXT NOT NULL"},
 	{table: "private_messages", name: "recipient_id", definition: "recipient_id TEXT NOT NULL"},

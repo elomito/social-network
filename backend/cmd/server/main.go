@@ -8,6 +8,8 @@ import (
 
 	"backend/internal/handlers"
 	"backend/internal/middleware"
+	"backend/internal/repository"
+	"backend/internal/services"
 	"backend/internal/websocket"
 	"backend/pkg/db"
 
@@ -34,6 +36,16 @@ func main() {
 
 	serverAddr := ":8080"
 
+	// Initialize repositories
+	eventRepo := repository.NewEventRepository(sqliteConn)
+	eventResponseRepo := repository.NewEventResponseRepository(sqliteConn)
+
+	// Initialize services
+	eventService := services.NewEventService(eventRepo, eventResponseRepo)
+
+	// Initialize handlers
+	eventHandler := handlers.NewEventHandler(eventService)
+
 	mux := http.NewServeMux()
 	hub := websocket.NewHub()
 	go hub.Run()
@@ -42,6 +54,35 @@ func main() {
 	mux.HandleFunc("/api/auth/login", handlers.LoginHandler(sqliteConn))
 	mux.HandleFunc("/api/auth/logout", handlers.LogoutHandler(sqliteConn))
 	mux.HandleFunc("/api/auth/me", handlers.MeHandler(sqliteConn))
+
+	// Event routes
+	mux.Handle("/api/events", middleware.Auth(sqliteConn)(http.HandlerFunc(eventHandler.CreateEvent)))
+	mux.Handle("/api/events/", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			eventHandler.GetEvent(w, r)
+		case http.MethodPut:
+			eventHandler.UpdateEvent(w, r)
+		case http.MethodDelete:
+			eventHandler.DeleteEvent(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/groups/{id}/events", middleware.Auth(sqliteConn)(http.HandlerFunc(eventHandler.ListGroupEvents)))
+	mux.Handle("/api/events/{id}/responses", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			eventHandler.GetEventResponses(w, r)
+		case http.MethodPost:
+			eventHandler.CreateEventResponse(w, r)
+		case http.MethodDelete:
+			eventHandler.DeleteEventResponse(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
 	mux.Handle("/", http.FileServer(http.Dir("../frontend/public")))
 
 	fmt.Printf("Starting server on http://localhost%s\n", serverAddr)

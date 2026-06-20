@@ -3,9 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"time"
+
+	"backend/internal/middleware"
 	"backend/internal/models"
 	"backend/internal/services"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -42,6 +44,11 @@ type CreateEventResponseRequest struct {
 
 // CreateEvent handles POST /events
 func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var req CreateEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -61,9 +68,15 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID, ok := r.Context().Value("userID").(uuid.UUID)
-	if !ok {
+	userIDStr := middleware.GetUserID(r)
+	if userIDStr == "" {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
 		return
 	}
 
@@ -76,18 +89,23 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.eventService.CreateEvent(r.Context(), event); err != nil {
-		http.Error(w, "failed to create event", http.StatusInternalServerError)
+		encodeError(w, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(event)
+	_ = json.NewEncoder(w).Encode(event)
 }
 
 // GetEvent handles GET /events/{id}
 func (h *EventHandler) GetEvent(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, err := uuid.Parse(pathParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -95,17 +113,22 @@ func (h *EventHandler) GetEvent(w http.ResponseWriter, r *http.Request) {
 
 	event, err := h.eventService.GetEvent(r.Context(), id)
 	if err != nil {
-		http.Error(w, "event not found", http.StatusNotFound)
+		encodeError(w, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(event)
+	_ = json.NewEncoder(w).Encode(event)
 }
 
 // ListGroupEvents handles GET /groups/{id}/events
 func (h *EventHandler) ListGroupEvents(w http.ResponseWriter, r *http.Request) {
-	groupID, err := uuid.Parse(r.PathValue("id"))
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	groupID, err := uuid.Parse(pathParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid group id", http.StatusBadRequest)
 		return
@@ -113,17 +136,22 @@ func (h *EventHandler) ListGroupEvents(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.eventService.ListGroupEvents(r.Context(), groupID)
 	if err != nil {
-		http.Error(w, "failed to list events", http.StatusInternalServerError)
+		encodeError(w, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(events)
+	_ = json.NewEncoder(w).Encode(events)
 }
 
 // UpdateEvent handles PUT /events/{id}
 func (h *EventHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	if r.Method != http.MethodPut {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, err := uuid.Parse(pathParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -149,24 +177,29 @@ func (h *EventHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.eventService.UpdateEvent(r.Context(), event); err != nil {
-		http.Error(w, "failed to update event", http.StatusInternalServerError)
+		encodeError(w, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(event)
+	_ = json.NewEncoder(w).Encode(event)
 }
 
 // DeleteEvent handles DELETE /events/{id}
 func (h *EventHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, err := uuid.Parse(pathParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.eventService.DeleteEvent(r.Context(), id); err != nil {
-		http.Error(w, "failed to delete event", http.StatusInternalServerError)
+		encodeError(w, err)
 		return
 	}
 
@@ -175,7 +208,12 @@ func (h *EventHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 
 // CreateEventResponse handles POST /events/{id}/responses
 func (h *EventHandler) CreateEventResponse(w http.ResponseWriter, r *http.Request) {
-	eventID, err := uuid.Parse(r.PathValue("id"))
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	eventID, err := uuid.Parse(pathParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -194,9 +232,15 @@ func (h *EventHandler) CreateEventResponse(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID, ok := r.Context().Value("userID").(uuid.UUID)
-	if !ok {
+	userIDStr := middleware.GetUserID(r)
+	if userIDStr == "" {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
 		return
 	}
 
@@ -207,18 +251,23 @@ func (h *EventHandler) CreateEventResponse(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.eventService.CreateEventResponse(r.Context(), response); err != nil {
-		http.Error(w, "failed to create event response", http.StatusInternalServerError)
+		encodeError(w, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // GetEventResponses handles GET /events/{id}/responses
 func (h *EventHandler) GetEventResponses(w http.ResponseWriter, r *http.Request) {
-	eventID, err := uuid.Parse(r.PathValue("id"))
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	eventID, err := uuid.Parse(pathParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -226,31 +275,42 @@ func (h *EventHandler) GetEventResponses(w http.ResponseWriter, r *http.Request)
 
 	responses, err := h.eventService.GetEventResponses(r.Context(), eventID)
 	if err != nil {
-		http.Error(w, "failed to get event responses", http.StatusInternalServerError)
+		encodeError(w, err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(responses)
+	_ = json.NewEncoder(w).Encode(responses)
 }
 
 // DeleteEventResponse handles DELETE /events/{id}/responses
 func (h *EventHandler) DeleteEventResponse(w http.ResponseWriter, r *http.Request) {
-	eventID, err := uuid.Parse(r.PathValue("id"))
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	eventID, err := uuid.Parse(pathParam(r, "id"))
 	if err != nil {
 		http.Error(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID, ok := r.Context().Value("userID").(uuid.UUID)
-	if !ok {
+	userIDStr := middleware.GetUserID(r)
+	if userIDStr == "" {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
+		return
+	}
+
 	if err := h.eventService.DeleteEventResponse(r.Context(), userID, eventID); err != nil {
-		http.Error(w, "failed to delete event response", http.StatusInternalServerError)
+		encodeError(w, err)
 		return
 	}
 
