@@ -299,20 +299,50 @@ func (s *AuthService) Register(user *models.User) error {
 
 ```
 1. User opens chat page
-   ↓
+    ↓
 2. Frontend → WebSocket connection to /ws
-   ↓
+    ↓
 3. WebSocket Handler → 
-   a. Validates session
-   b. Registers client in hub
-   ↓
+    a. Validates session
+    b. Registers client in hub
+    ↓
 4. User sends message
-   ↓
+    ↓
 5. WebSocket Handler → 
-   a. Calls messageRepo.Create()
-   b. Broadcasts to recipient(s)
-   ↓
+    a. Calls messageRepo.Create()
+    b. Broadcasts to recipient(s)
+    ↓
 6. Recipient's browser → Receives message instantly
+```
+
+### Example: RSVP to Event
+
+```
+1. User views group events
+    ↓
+2. Frontend → GET /api/groups/{groupId}/events
+    ↓
+3. Event Handler → ListGroupEvents()
+    ↓
+4. Event Service → eventRepo.FindByGroupID()
+    ↓
+5. Database → Returns events
+    ↓
+6. Frontend → Displays events with RSVP buttons
+    ↓
+7. User clicks "Going" button
+    ↓
+8. Frontend → POST /api/events/{eventId}/responses
+    ↓
+9. Event Handler → CreateEventResponse()
+    ↓
+10. Event Service → 
+    a. Checks if user already has a response
+    b. If exists, updates it; if not, creates new
+    ↓
+11. Database → Stores/Updates RSVP
+    ↓
+12. Frontend → Updates UI to show "Going" selected
 ```
 
 ---
@@ -608,12 +638,14 @@ type Client struct {
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | /api/groups/:id/events | Get group events |
-| POST | /api/groups/:id/events | Create event |
-| GET | /api/events/:id | Get event details |
-| PUT | /api/events/:id | Update event |
-| DELETE | /api/events/:id | Delete event |
-| POST | /api/events/:id/respond | RSVP to event |
+| POST | /api/events | Create a new event |
+| GET | /api/events/{id} | Get event details |
+| PUT | /api/events/{id} | Update event |
+| DELETE | /api/events/{id} | Delete event |
+| GET | /api/groups/{id}/events | Get all events for a group |
+| POST | /api/events/{id}/responses | RSVP to an event (going, not_going, maybe) |
+| GET | /api/events/{id}/responses | Get all RSVP responses for an event |
+| DELETE | /api/events/{id}/responses | Remove your RSVP from an event |
 
 ### Chat Endpoints
 
