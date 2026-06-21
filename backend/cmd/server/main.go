@@ -58,6 +58,9 @@ func main() {
 	mux.HandleFunc("/api/auth/logout", handlers.LogoutHandler(sqliteConn))
 	mux.HandleFunc("/api/auth/me", handlers.MeHandler(sqliteConn))
 
+	// Public user profile
+	mux.HandleFunc("/api/users", handlers.ProfileHandler(userService))
+
 	// Event routes
 	mux.Handle("/api/events", middleware.Auth(sqliteConn)(http.HandlerFunc(eventHandler.CreateEvent)))
 	mux.Handle("/api/events/", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
