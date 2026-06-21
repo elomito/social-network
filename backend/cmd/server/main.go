@@ -40,6 +40,9 @@ func main() {
 	eventRepo := repository.NewEventRepository(sqliteConn)
 	eventResponseRepo := repository.NewEventResponseRepository(sqliteConn)
 
+	// Initialize user service
+	userService := services.NewUserService(sqliteConn)
+
 	// Initialize services
 	eventService := services.NewEventService(eventRepo, eventResponseRepo)
 
