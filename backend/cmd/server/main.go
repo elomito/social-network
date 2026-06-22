@@ -40,6 +40,9 @@ func main() {
 	eventRepo := repository.NewEventRepository(sqliteConn)
 	eventResponseRepo := repository.NewEventResponseRepository(sqliteConn)
 
+	// Initialize user service
+	userService := services.NewUserService(sqliteConn)
+
 	// Initialize services
 	eventService := services.NewEventService(eventRepo, eventResponseRepo)
 
@@ -54,6 +57,9 @@ func main() {
 	mux.HandleFunc("/api/auth/login", handlers.LoginHandler(sqliteConn))
 	mux.HandleFunc("/api/auth/logout", handlers.LogoutHandler(sqliteConn))
 	mux.HandleFunc("/api/auth/me", handlers.MeHandler(sqliteConn))
+
+	// Public user profile
+	mux.HandleFunc("/api/users", handlers.ProfileHandler(userService))
 
 	// Event routes
 	mux.Handle("/api/events", middleware.Auth(sqliteConn)(http.HandlerFunc(eventHandler.CreateEvent)))
