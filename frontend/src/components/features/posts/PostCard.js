@@ -51,3 +51,18 @@ export default function PostCard({ post }) {
           <img src={imageUrl} alt="Post attachment" className="w-full h-full object-cover" />
         </div>
       )}
+{/* FOOTER SECTION: Interaction Entry Points */}
+      <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-gray-500 text-sm">
+        <button className="flex items-center space-x-2 hover:text-blue-600 transition">
+          <span>👍</span>
+          <span className="font-medium text-xs">{likesCount} Likes</span>
+        </button>
+        
+        <button className="flex items-center space-x-2 hover:text-blue-600 transition">
+          <span>💬</span>
+          <span className="font-medium text-xs">{commentsCount} Comments</span>
+        </button>
+      </div>
+    </div>
+  );
+}
