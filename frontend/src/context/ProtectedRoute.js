@@ -1,15 +1,14 @@
-import React from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'next/router';
+import { useAuth } from '../hooks/useAuth';
+import { useRouter } from 'next/navigation';
 
-const ProtectedRoute = ({ children }) => {
+export default function ProtectedRoute({ children }) {
   const { token } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
 
   if (!token) {
-    navigate('/auth/login');
+    router.push('/auth/login');
+    return null;
   }
 
   return children;
-};
-export default ProtectedRoute;
+}
