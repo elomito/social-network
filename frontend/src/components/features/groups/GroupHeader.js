@@ -41,12 +41,14 @@ export default function GroupHeader({ group, isMember, onJoinToggle, onInvite })
               >
                 Joined
               </button>
-              <button
-                onClick={onInvite}
-                className="px-3 py-1 rounded bg-green-600 text-white text-sm hover:bg-green-700"
-              >
-                Invite
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={onInvite}
+                  className="px-3 py-1 rounded bg-green-600 text-white text-sm hover:bg-green-700"
+                >
+                  Invite
+                </button>
+              </div>
             </div>
           )}
         </div>
