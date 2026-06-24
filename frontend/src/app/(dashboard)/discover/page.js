@@ -120,3 +120,50 @@ return (
           className="w-full px-4 py-2.5 text-sm bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 text-black"
         />
       </div>
+{/* DISCOVERY GRID TILES */}
+      {users.length === 0 && !loading ? (
+        <div className="text-center py-16 bg-white rounded-xl border border-gray-100 shadow-sm">
+          <p className="text-gray-500 font-medium">No network profiles matched your search parameters.</p>
+          <p className="text-gray-400 text-xs mt-1">Try check spelling adjustments or look for alternate nicknames.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {users.map((user, index) => {
+            const isLast = users.length === index + 1;
+            return (
+              <div
+                key={user.id}
+                ref={isLast ? lastUserElementRef : null}
+                className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm flex items-center justify-between space-x-4"
+              >
+                <div className="flex items-center space-x-3 overflow-hidden">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.username} className="w-11 h-11 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-11 h-11 bg-gradient-to-tr from-blue-500 to-indigo-500 text-white rounded-full flex items-center justify-center font-bold uppercase text-sm flex-shrink-0">
+                      {user.username[0]}
+                    </div>
+                  )}
+                  <div className="truncate">
+                    <h3 className="text-sm font-semibold text-gray-900 truncate">{user.username}</h3>
+                    <p className="text-xs text-gray-400 truncate">{user.fullName || 'Network Peer'}</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={actionLoading[user.id]}
+                  onClick={() => handleFollowToggle(user.id, user.isFollowing)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition flex-shrink-0 ${
+                    user.isFollowing
+                      ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                  }`}
+                >
+                  {actionLoading[user.id] ? '...' : user.isFollowing ? 'Unfollow' : 'Follow'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
