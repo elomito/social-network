@@ -21,3 +21,16 @@ export default function DiscoverPage() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+// 2. Infinite Scroll: Triggers loading the next batch when reaching the bottom
+  const lastUserElementRef = useCallback((node) => {
+    if (loading) return;
+    if (observer.current) observer.current.disconnect();
+
+    observer.current = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasMore) {
+        setPage((prevPage) => prevPage + 1);
+      }
+    });
+
+    if (node) observer.current.observe(node);
+  }, [loading, hasMore]);
