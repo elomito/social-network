@@ -1,14 +1,13 @@
-import React, { useContext } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
-import AuthContext from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 
 const Logout = () => {
-  const { setToken } = useContext(AuthContext);
+  const { setToken } = useAuth();
   const router = useRouter();
 
   const handleLogout = () => {
-    setToken('');
-    localStorage.removeItem('authToken');
+    setToken(null);
     router.push('/auth/login');
   };
 
