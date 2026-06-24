@@ -12,3 +12,12 @@ export default function DiscoverPage() {
   const [actionLoading, setActionLoading] = useState({});
 
   const observer = useRef();
+// 1. Debounce Logic: Updates debouncedQuery 300ms after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+      setPage(1); // Reset back to page 1 whenever searching something new
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
