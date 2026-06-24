@@ -73,3 +73,21 @@ export default function DiscoverPage() {
 
     fetchUsers();
   }, [debouncedQuery, page]);
+// 4. Follow/Unfollow Handler Action
+  const handleFollowToggle = async (userId, currentStatus) => {
+    try {
+      setActionLoading(prev => ({ ...prev, [userId]: true }));
+      const token = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('token='))
+        ?.split('=')[1];
+
+      const endpoint = currentStatus ? `/api/unfollow/${userId}` : `/api/follow/${userId}`;
+      const response = await fetch(`http://localhost:8080${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Action execution failed.');
