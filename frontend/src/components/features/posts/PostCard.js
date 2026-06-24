@@ -41,3 +41,7 @@ export default function PostCard({ post }) {
           </div>
         </div>
       </div>
+{/* BODY SECTION: Post Text Content */}
+      <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+        {content}
+      </p>
