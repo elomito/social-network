@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import api from '@/lib/apiClient';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
@@ -25,21 +26,10 @@ const handleSubmit = async (e) => {
     if (!validateForm()) return;
     setLoading(true);
 
-    try {
-      // API Integration matching your Go backend setup
-      const response = await fetch('http://localhost:8080/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Invalid email or password.');
-      }
-// Store token on success & redirect
-      document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
-      window.location.href = '/feed'; // Team's dashboard route
+try {
+      const response = await api.post('/api/auth/login', { email, password });
+      document.cookie = `token=${response.data.token}; path=/; max-age=86400; SameSite=Strict`;
+      window.location.href = '/feed';
 
     } catch (err) {
       setError(err.message);
