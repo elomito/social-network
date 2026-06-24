@@ -15,3 +15,28 @@ export default function FeedPage() {
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
+return (
+    <div className="max-w-2xl mx-auto py-6 px-4 space-y-6">
+      {/* COMPOSER PLACEHOLDER (#68) */}
+      <div className="p-4 bg-white rounded-lg shadow border border-gray-200">
+        <p className="text-gray-400 text-sm">What's on your mind? (Composer UI Placeholder)</p>
+      </div>
+
+      {/* FEED CONTAINER */}
+      <div className="space-y-4">
+        {loading ? (
+          /* LOADING SKELETON STATE */
+          [1, 2, 3].map((n) => (
+            <div key={n} className="p-6 bg-white rounded-lg shadow animate-pulse space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/6"></div>
+                </div>
+              </div>
+              <div className="h-4 bg-gray-200 rounded w-full"></div>
+              <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+            </div>
+          ))
+        ) : posts.length === 0 ? (
