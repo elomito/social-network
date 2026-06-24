@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
+import { useEffect, useState } from 'react'
 
 export default function Page({ params }) {
   const userId = params?.userId
@@ -8,7 +8,7 @@ export default function Page({ params }) {
 
   useEffect(() => {
     if (!userId) return
-    fetch(`/api/users?id=${userId}`, { credentials: "include" })
+    fetch(`/api/users?id=${userId}`, { credentials: 'include' })
       .then((res) => res.json())
       .then(setData)
       .catch(() => setData(null))

@@ -1,4 +1,4 @@
-"use client";
+'use client'
 
 import React, { useEffect, useState } from 'react'
 import useWebSocket from '../../../hooks/useWebSocket'
@@ -22,17 +22,24 @@ export default function ChatWindow({ room }) {
   }
 
   return (
-    <div className="bg-white rounded shadow p-4 flex flex-col h-96">
-      <div className="flex-1 overflow-auto space-y-2 mb-3">
+    <div className="flex h-96 flex-col rounded bg-white p-4 shadow">
+      <div className="mb-3 flex-1 space-y-2 overflow-auto">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`p-2 rounded ${msg.self ? 'bg-blue-100 self-end' : 'bg-gray-100'}`}>
+          <div
+            key={idx}
+            className={`rounded p-2 ${msg.self ? 'self-end bg-blue-100' : 'bg-gray-100'}`}
+          >
             {msg.text || JSON.stringify(msg)}
           </div>
         ))}
       </div>
       <form onSubmit={submit} className="flex gap-2">
-        <input value={text} onChange={(e) => setText(e.target.value)} className="flex-1 border p-2 rounded" />
-        <button className="px-3 py-1 bg-blue-600 text-white rounded">Send</button>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="flex-1 rounded border p-2"
+        />
+        <button className="rounded bg-blue-600 px-3 py-1 text-white">Send</button>
       </form>
     </div>
   )

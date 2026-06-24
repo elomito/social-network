@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React, { useEffect, useState, useRef } from 'react'
 import useWebSocket from '../../../../hooks/useWebSocket'
@@ -21,7 +21,10 @@ export default function GroupChatPanel({ groupId, isOpen }) {
         if (!mounted) return
         setMessages(msgs)
         // scroll to bottom
-        setTimeout(() => scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight }), 50)
+        setTimeout(
+          () => scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight }),
+          50
+        )
       } catch (e) {
         console.error(e)
       } finally {
@@ -29,14 +32,19 @@ export default function GroupChatPanel({ groupId, isOpen }) {
       }
     }
     if (isOpen) load()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [groupId, isOpen])
 
   useEffect(() => {
     const off = onMessage((msg) => {
       if (msg && msg.type === 'group_message' && msg.group_id === groupId) {
         setMessages((m) => [...m, msg.message])
-        setTimeout(() => scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight }), 20)
+        setTimeout(
+          () => scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight }),
+          20
+        )
       }
     })
     return off
@@ -55,16 +63,23 @@ export default function GroupChatPanel({ groupId, isOpen }) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h3 className="font-semibold mb-3">Group Chat</h3>
-      <div ref={scrollerRef} className="h-64 overflow-auto space-y-2 mb-3">
+    <div className="rounded-lg bg-white p-4 shadow">
+      <h3 className="mb-3 font-semibold">Group Chat</h3>
+      <div ref={scrollerRef} className="mb-3 h-64 space-y-2 overflow-auto">
         {loading && <div className="text-sm text-gray-500">Loading messages...</div>}
-        {messages.map((m) => <MessageBubble key={m.id} message={m} />)}
+        {messages.map((m) => (
+          <MessageBubble key={m.id} message={m} />
+        ))}
       </div>
 
       <form onSubmit={submit} className="flex gap-2">
-        <input value={text} onChange={(e) => setText(e.target.value)} className="flex-1 border p-2 rounded" placeholder="Write a message..." />
-        <button className="px-3 py-1 bg-blue-600 text-white rounded">Send</button>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="flex-1 rounded border p-2"
+          placeholder="Write a message..."
+        />
+        <button className="rounded bg-blue-600 px-3 py-1 text-white">Send</button>
       </form>
     </div>
   )
