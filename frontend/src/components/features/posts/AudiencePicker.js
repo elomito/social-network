@@ -39,3 +39,17 @@ const response = await fetch('http://localhost:8080/api/followers', {
 
     fetchFollowers();
   }, [privacy]);
+// 2. Bubble selection arrays back up to the main Composer state context
+  useEffect(() => {
+    if (privacy === 'private') {
+      onAudienceChange(selectedFollowers.map(f => f.id));
+      if (selectedFollowers.length === 0) {
+        if (onError) onError('Private posts require at least one selected follower.');
+      } else {
+        if (onError) onError('');
+      }
+    } else {
+      onAudienceChange([]); // Clear if toggled away
+      if (onError) onError('');
+    }
+  }, [selectedFollowers, privacy]);
