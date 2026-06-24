@@ -103,3 +103,20 @@ export default function DiscoverPage() {
       setActionLoading(prev => ({ ...prev, [userId]: false }));
     }
   };
+return (
+    <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
+      <div>
+        <h1 className="text-xl font-bold text-gray-900">Discover Creators</h1>
+        <p className="text-sm text-gray-500">Explore and follow profiles around your workspace network.</p>
+      </div>
+
+      {/* SEARCH BAR INPUT */}
+      <div className="relative">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search network profiles by name or nickname..."
+          className="w-full px-4 py-2.5 text-sm bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 text-black"
+        />
+      </div>
