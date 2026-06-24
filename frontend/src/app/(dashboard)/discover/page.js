@@ -34,3 +34,12 @@ export default function DiscoverPage() {
 
     if (node) observer.current.observe(node);
   }, [loading, hasMore]);
+// 3. Core API Fetching
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const token = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('token='))
+          ?.split('=')[1];
