@@ -2,12 +2,15 @@
 
 import React, { useState } from 'react'
 import api from '@/lib/apiClient'
+import { useAuth } from '../../hooks/useAuth'
 
 export default function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const { setToken } = useAuth()
+
   const validateForm = () => {
     if (!email.includes('@')) {
       setError('Please enter a valid email address.')
@@ -28,7 +31,7 @@ export default function LoginForm() {
 
     try {
       const response = await api.post('/api/auth/login', { email, password })
-      document.cookie = `token=${response.data.token}; path=/; max-age=86400; SameSite=Strict`
+      setToken(response.data.token)
       window.location.href = '/feed'
     } catch (err) {
       setError(err.message)

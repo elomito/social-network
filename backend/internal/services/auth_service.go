@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 var (
@@ -173,6 +174,16 @@ func AuthenticateUser(db *sql.DB, email, password string) (string, error) {
 	return userID, nil
 }
 
+func GenerateJWT(userID uuid.UUID) (string, error) {
+	secret := []byte("your-secret-key") // TODO: move to config
+	claims := jwt.MapClaims{
+		"sub": userID.String(),
+		"exp": time.Now().Add(7 * 24 * time.Hour).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(secret)
+}
+
 func StartSession(db *sql.DB, userID string) (models.Session, error) {
 	session := models.Session{
 		ID:        uuid.New(),
@@ -198,6 +209,7 @@ func StartSession(db *sql.DB, userID string) (models.Session, error) {
 	}
 
 	return session, nil
+}
 }
 
 func GetSessionFromDB(db *sql.DB, sessionID string) (models.Session, error) {
