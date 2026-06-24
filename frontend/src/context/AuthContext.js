@@ -1,22 +1,24 @@
-import React, { useState, useEffect, createContext } from 'react';
+import { createContext, useState, useEffect } from "react";
 
-const AuthContext = createContext();
+export const AuthContext = createContext({
+  token: null,
+  setToken: () => {},
+});
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('authToken') || '';
-    }
-    return '';
-  });
+  const [token, setToken] = useState(localStorage.getItem("auth_token"));
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('authToken', token);
+    if (token) {
+      localStorage.setItem("auth_token", token);
+    } else {
+      localStorage.removeItem("auth_token");
     }
   }, [token]);
 
-  return <AuthContext.Provider value={{ token, setToken }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ token, setToken }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
-
-export default AuthContext;
