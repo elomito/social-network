@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from 'react'
-import GroupHeader from '../../../../components/features/groups/GroupHeader'
+import GroupHeader from '../../../../components/features/groups/GroupHeader.js'
+import {
+  getGroupMembers,
+  getGroupInvitations,
+  sendGroupInvite,
+  respondToInvite,
+  requestJoinGroup,
+  getGroupJoinRequests,
+  respondToJoinRequest,
+  getCurrentUser,
+} from '../../../../lib/apiClient.js'
 
 async function fetchJSON(url) {
   const res = await fetch(url, { credentials: 'include' })
@@ -11,9 +21,14 @@ export default function GroupPage({ params }) {
   const { groupId } = params
   const [group, setGroup] = useState(null)
   const [members, setMembers] = useState([])
+  const [invitations, setInvitations] = useState([])
+  const [joinRequests, setJoinRequests] = useState([])
   const [isMember, setIsMember] = useState(false)
+  const [isCreator, setIsCreator] = useState(false)
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [inviteModalOpen, setInviteModalOpen] = useState(false)
+  const [inviteeId, setInviteeId] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -23,23 +38,32 @@ export default function GroupPage({ params }) {
         if (!mounted) return
         setGroup(g)
 
-        // members endpoint included on group response? fallback
-        const membersResp = await fetchJSON(`/api/groups/${groupId}/members`)
+        const membersResp = await getGroupMembers(groupId)
         if (!mounted) return
         setMembers(membersResp)
 
-        // check membership (server returns boolean)
-        const meResp = await fetchJSON('/api/auth/me')
-        const me = meResp && meResp.id
-        const member = membersResp.some(m => m.id === me)
-        setIsMember(member)
+        const me = await getCurrentUser()
+        setIsCreator(me && g && me.id === g.creator_id)
 
-        if (member) {
+        setIsMember(membersResp.some(m => m.id === (me && me.id)))
+
+        // load invitations (for members) and join requests (for creator)
+        if (membersResp.some(m => m.id === (me && me.id))) {
+          const inv = await getGroupInvitations(groupId)
+          if (!mounted) return
+          setInvitations(inv)
+        }
+        if (me && g && me.id === g.creator_id) {
+          const reqs = await getGroupJoinRequests(groupId)
+          if (!mounted) return
+          setJoinRequests(reqs)
+        }
+
+        if (membersResp.some(m => m.id === (me && me.id))) {
           const postsResp = await fetchJSON(`/api/groups/${groupId}/posts`)
           setPosts(postsResp)
         }
       } catch (err) {
-        // swallow for now
         console.error(err)
       } finally {
         setLoading(false)
@@ -52,24 +76,65 @@ export default function GroupPage({ params }) {
   async function handleJoinToggle() {
     try {
       if (!isMember) {
-        await fetch(`/api/groups/${groupId}/join`, { method: 'POST', credentials: 'include' })
+        // request to join when group requires approval
+        await requestJoinGroup(groupId)
       } else {
         await fetch(`/api/groups/${groupId}/leave`, { method: 'POST', credentials: 'include' })
       }
       // reload members
-      const membersResp = await fetchJSON(`/api/groups/${groupId}/members`)
+      const membersResp = await getGroupMembers(groupId)
       setMembers(membersResp)
-      const meResp = await fetchJSON('/api/auth/me')
-      const me = meResp && meResp.id
-      setIsMember(membersResp.some(m => m.id === me))
+      const me = await getCurrentUser()
+      setIsMember(membersResp.some(m => m.id === (me && me.id)))
     } catch (err) {
       console.error(err)
     }
   }
 
-  function handleInvite() {
-    // small placeholder: open modal or navigation
-    alert('Invite functionality not implemented yet')
+  async function openInviteModal() {
+    setInviteModalOpen(true)
+  }
+
+  async function sendInvite() {
+    try {
+      await sendGroupInvite(groupId, inviteeId)
+      const inv = await getGroupInvitations(groupId)
+      setInvitations(inv)
+      setInviteModalOpen(false)
+      setInviteeId('')
+    } catch (e) {
+      console.error(e)
+      alert('Failed to send invite')
+    }
+  }
+
+  async function handleRespondInvite(invitationId, accept) {
+    try {
+      await respondToInvite(groupId, invitationId, accept)
+      const inv = await getGroupInvitations(groupId)
+      setInvitations(inv)
+      // refresh members if accepted
+      if (accept) {
+        const membersResp = await getGroupMembers(groupId)
+        setMembers(membersResp)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function handleRespondJoinRequest(requestId, approve) {
+    try {
+      await respondToJoinRequest(groupId, requestId, approve)
+      const reqs = await getGroupJoinRequests(groupId)
+      setJoinRequests(reqs)
+      if (approve) {
+        const membersResp = await getGroupMembers(groupId)
+        setMembers(membersResp)
+      }
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   if (loading) return <div className="p-6">Loading...</div>
@@ -85,7 +150,7 @@ export default function GroupPage({ params }) {
           privacy: group.privacy || 'public',
           cover_image_url: group.cover_image_url,
           member_count: members.length,
-        }} isMember={isMember} onJoinToggle={handleJoinToggle} onInvite={handleInvite} />
+        }} isMember={isMember} onJoinToggle={handleJoinToggle} onInvite={openInviteModal} />
 
         <section className="bg-white rounded-lg shadow p-4 mb-6">
           <h2 className="text-lg font-semibold mb-3">Members</h2>
@@ -226,6 +291,55 @@ export default function GroupPage({ params }) {
           <h3 className="text-md font-semibold mb-2">About</h3>
           <p className="text-sm text-gray-600">{group.description}</p>
         </div>
+
+        {inviteModalOpen && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-4 w-96">
+              <h4 className="font-semibold mb-2">Invite a user</h4>
+              <input value={inviteeId} onChange={(e) => setInviteeId(e.target.value)} placeholder="User ID or username" className="w-full p-2 border rounded mb-3" />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setInviteModalOpen(false)} className="px-3 py-1 border rounded">Cancel</button>
+                <button onClick={sendInvite} className="px-3 py-1 bg-blue-600 text-white rounded">Send Invite</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {invitations.length > 0 && (
+          <div className="mt-4 bg-white rounded-lg shadow p-4">
+            <h4 className="font-semibold mb-2">Invitations</h4>
+            {invitations.map(inv => (
+              <div key={inv.id} className="flex items-center justify-between p-2 border-b">
+                <div>
+                  <div className="text-sm font-medium">{inv.inviter && inv.inviter.name ? inv.inviter.name : 'Someone'} invited you</div>
+                  <div className="text-xs text-gray-500">Status: {inv.status}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleRespondInvite(inv.id, true)} className="px-2 py-1 bg-green-600 text-white rounded">Accept</button>
+                  <button onClick={() => handleRespondInvite(inv.id, false)} className="px-2 py-1 border rounded">Decline</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isCreator && joinRequests.length > 0 && (
+          <div className="mt-4 bg-white rounded-lg shadow p-4">
+            <h4 className="font-semibold mb-2">Join Requests</h4>
+            {joinRequests.map(req => (
+              <div key={req.id} className="flex items-center justify-between p-2 border-b">
+                <div>
+                  <div className="text-sm font-medium">{req.user && req.user.name ? req.user.name : 'Someone'} requested to join</div>
+                  <div className="text-xs text-gray-500">{new Date(req.created_at).toLocaleString()}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleRespondJoinRequest(req.id, true)} className="px-2 py-1 bg-green-600 text-white rounded">Approve</button>
+                  <button onClick={() => handleRespondJoinRequest(req.id, false)} className="px-2 py-1 border rounded">Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </aside>
     </div>
   )
