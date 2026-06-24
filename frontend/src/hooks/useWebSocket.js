@@ -1,88 +1,32 @@
-'use client'
+'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useCallback } from 'react';
+import { useWebSocketContext } from '@/context/WebSocketContext';
 
-export default function useWebSocket(path = '/ws') {
-  const wsRef = useRef(null)
-  const listenersRef = useRef(new Set())
-  const [connected, setConnected] = useState(false)
+/**
+ * Shared WebSocket Hook
+ * @param {string} [filterType='*'] - Optional routing filter key (e.g., 'chat', 'notification')
+ */
+export default function useWebSocket(filterType = '*') {
+  const { connectionStatus, send, listeners } = useWebSocketContext();
 
-  const send = useCallback((payload) => {
-    try {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-      wsRef.current.send(JSON.stringify(payload))
-    } catch (e) {
-      console.error('ws send error', e)
-    }
-  }, [])
+  const connected = connectionStatus === 'CONNECTED';
 
-  // Returns an unsubscribe function — always call it in useEffect cleanup
+  // Backwards-compatible legacy subscribe signature
   const onMessage = useCallback((cb) => {
-    listenersRef.current.add(cb)
-    return () => listenersRef.current.delete(cb)
-  }, [])
-
-  useEffect(() => {
-    let mounted = true
-
-    async function init() {
-      let userId = null
-      try {
-        const res = await fetch('/api/auth/me', { credentials: 'include' })
-        if (res.ok) {
-          const json = await res.json()
-          userId = json && json.id
-        }
-      } catch {
-        // not logged in yet — connect anonymously
-      }
-
-      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-      const host = window.location.host
-      const q = userId ? `?user_id=${encodeURIComponent(userId)}` : ''
-      const url = `${proto}://${host}${path}${q}`
-
-      const ws = new WebSocket(url)
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        if (mounted) setConnected(true)
-      }
-      ws.onclose = () => {
-        if (mounted) setConnected(false)
-      }
-      ws.onerror = () => {
-        /* onerror is always followed by onclose */
-      }
-      ws.onmessage = (ev) => {
-        let data = null
-        try {
-          data = JSON.parse(ev.data)
-        } catch {
-          data = ev.data
-        }
-        listenersRef.current.forEach((cb) => {
-          try {
-            cb(data)
-          } catch {
-            /* noop */
-          }
-        })
-      }
-    }
-
-    init()
-
+    const record = { type: filterType, callback: cb };
+    listeners.add(record);
+    
+    // Returns the exact unsubscribe function expected by legacy consumer components
     return () => {
-      mounted = false
-      try {
-        if (wsRef.current) wsRef.current.close()
-      } catch {
-        /* noop */
-      }
-      listenersRef.current.clear()
-    }
-  }, [path])
+      listeners.delete(record);
+    };
+  }, [filterType, listeners]);
 
-  return { connected, send, onMessage }
+  return { 
+    connected, 
+    connectionStatus, // Exposed for your new status indicators (CONNECTED, RECONNECTING, etc.)
+    send, 
+    onMessage 
+  };
 }
