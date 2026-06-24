@@ -45,3 +45,9 @@ export default function PostCard({ post }) {
       <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
         {content}
       </p>
+{/* OPTIONAL IMAGE ATTACHMENT */}
+      {imageUrl && (
+        <div className="mt-2 overflow-hidden rounded-lg max-h-96 bg-gray-50 border border-gray-100">
+          <img src={imageUrl} alt="Post attachment" className="w-full h-full object-cover" />
+        </div>
+      )}
