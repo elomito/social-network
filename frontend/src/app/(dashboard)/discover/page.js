@@ -12,7 +12,8 @@ export default function DiscoverPage() {
   const [actionLoading, setActionLoading] = useState({});
 
   const observer = useRef();
-// 1. Debounce Logic: Updates debouncedQuery 300ms after user stops typing
+
+  // 1. Debounce Logic: Updates debouncedQuery 300ms after user stops typing
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
@@ -21,7 +22,8 @@ export default function DiscoverPage() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
-// 2. Infinite Scroll: Triggers loading the next batch when reaching the bottom
+
+  // 2. Infinite Scroll: Triggers loading the next batch when reaching the bottom
   const lastUserElementRef = useCallback((node) => {
     if (loading) return;
     if (observer.current) observer.current.disconnect();
@@ -34,7 +36,8 @@ export default function DiscoverPage() {
 
     if (node) observer.current.observe(node);
   }, [loading, hasMore]);
-// 3. Core API Fetching
+
+  // 3. Core API Fetching
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -43,7 +46,8 @@ export default function DiscoverPage() {
           .split('; ')
           .find(row => row.startsWith('token='))
           ?.split('=')[1];
-// Targets your Go api server directory configuration
+
+        // Targets your Go api server directory configuration
         const url = `http://localhost:8080/api/users/discover?search=${encodeURIComponent(debouncedQuery)}&page=${page}&limit=12`;
         
         const response = await fetch(url, {
@@ -73,7 +77,8 @@ export default function DiscoverPage() {
 
     fetchUsers();
   }, [debouncedQuery, page]);
-// 4. Follow/Unfollow Handler Action
+
+  // 4. Follow/Unfollow Handler Action
   const handleFollowToggle = async (userId, currentStatus) => {
     try {
       setActionLoading(prev => ({ ...prev, [userId]: true }));
@@ -91,7 +96,8 @@ export default function DiscoverPage() {
       });
 
       if (!response.ok) throw new Error('Action execution failed.');
-// Refresh locally in-state instantly
+
+      // Refresh locally in-state instantly
       setUsers(prevUsers => 
         prevUsers.map(user => 
           user.id === userId ? { ...user, isFollowing: !currentStatus } : user
@@ -103,7 +109,8 @@ export default function DiscoverPage() {
       setActionLoading(prev => ({ ...prev, [userId]: false }));
     }
   };
-return (
+
+  return (
     <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-900">Discover Creators</h1>
@@ -120,7 +127,8 @@ return (
           className="w-full px-4 py-2.5 text-sm bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 text-black"
         />
       </div>
-{/* DISCOVERY GRID TILES */}
+
+      {/* DISCOVERY GRID TILES */}
       {users.length === 0 && !loading ? (
         <div className="text-center py-16 bg-white rounded-xl border border-gray-100 shadow-sm">
           <p className="text-gray-500 font-medium">No network profiles matched your search parameters.</p>
@@ -167,3 +175,24 @@ return (
           })}
         </div>
       )}
+
+      {/* PAGINATION PROGRESS BAR SKELETON */}
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="p-4 bg-white rounded-xl border border-gray-100 shadow-sm animate-pulse flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-11 h-11 bg-gray-200 rounded-full"></div>
+                <div className="space-y-2">
+                  <div className="h-3 bg-gray-200 rounded w-20"></div>
+                  <div className="h-2 bg-gray-200 rounded w-12"></div>
+                </div>
+              </div>
+              <div className="w-16 h-7 bg-gray-200 rounded-md"></div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
