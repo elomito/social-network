@@ -1,4 +1,4 @@
-"use client";
+'use client'
 
 import React from 'react'
 import { AuthProvider } from '../context/AuthContext'
@@ -15,7 +15,10 @@ export default function RootLayout({ children }) {
           <NotificationProvider>
             <Navbar />
             <div className="app-grid container">
-              <aside className="sidebar"> <Sidebar /> </aside>
+              <aside className="sidebar">
+                {' '}
+                <Sidebar />{' '}
+              </aside>
               <main>{children}</main>
               <div>{/* right column: placeholders for trends/ads */}</div>
             </div>
