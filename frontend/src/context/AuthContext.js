@@ -3,10 +3,12 @@ import { createContext, useState, useEffect } from "react";
 export const AuthContext = createContext({
   token: null,
   setToken: () => {},
+  isAuthenticated: false,
 });
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("auth_token"));
+  const isAuthenticated = !!token;
 
   useEffect(() => {
     if (token) {
@@ -17,7 +19,7 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   return (
-    <AuthContext.Provider value={{ token, setToken }}>
+    <AuthContext.Provider value={{ token, setToken, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );

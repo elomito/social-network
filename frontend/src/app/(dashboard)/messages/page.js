@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React, { useEffect, useState, useRef } from 'react'
 import useWebSocket from '../../../hooks/useWebSocket'
@@ -44,18 +44,24 @@ export default function MessagesPage() {
         if (!mounted) return
         setMessages(msgs)
         setTimeout(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight }), 50)
-      } catch (e) { console.error(e) }
+      } catch (e) {
+        console.error(e)
+      }
     }
     loadMsgs()
     // check follow status if peer exists
     if (active.peer && active.peer.id) {
-      getFollowStatus(active.peer.id).then(s => {
-        // allow messaging if either follows the other
-        const ok = s && (s.follows || s.followed_by)
-        setCanMessage(!!ok)
-      }).catch(() => setCanMessage(false))
+      getFollowStatus(active.peer.id)
+        .then((s) => {
+          // allow messaging if either follows the other
+          const ok = s && (s.follows || s.followed_by)
+          setCanMessage(!!ok)
+        })
+        .catch(() => setCanMessage(false))
     }
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [active])
 
   useEffect(() => {
@@ -66,9 +72,15 @@ export default function MessagesPage() {
         setTimeout(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight }), 20)
       }
       // if a new conversation arrives, refresh list
-      if (msg.type === 'private_message' && msg.conversation_id && !conversations.find(c => c.id === msg.conversation_id)) {
+      if (
+        msg.type === 'private_message' &&
+        msg.conversation_id &&
+        !conversations.find((c) => c.id === msg.conversation_id)
+      ) {
         // reload conversations
-        getConversations().then(setConversations).catch(() => {})
+        getConversations()
+          .then(setConversations)
+          .catch(() => {})
       }
     })
     return off
@@ -91,7 +103,9 @@ export default function MessagesPage() {
     e.preventDefault()
     if (!text || !active) return
     if (!canMessage) {
-      alert('You cannot message this user because you are not following each other. You must follow or be followed to message.')
+      alert(
+        'You cannot message this user because you are not following each other. You must follow or be followed to message.'
+      )
       return
     }
     try {
@@ -103,15 +117,23 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="p-6 flex gap-6">
+    <div className="flex gap-6 p-6">
       <aside className="w-80">
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="font-semibold mb-3">Conversations</h3>
+        <div className="rounded-lg bg-white p-4 shadow">
+          <h3 className="mb-3 font-semibold">Conversations</h3>
           <div className="space-y-2">
-            {conversations.map(c => (
-              <div key={c.id} onClick={() => setActive(c)} className={`p-2 rounded hover:bg-gray-50 cursor-pointer ${active && active.id === c.id ? 'bg-gray-100' : ''}`}>
-                <div className="text-sm font-medium">{c.peer ? c.peer.name : c.title || 'Conversation'}</div>
-                <div className="text-xs text-gray-500">{c.last_message ? c.last_message.content : ''}</div>
+            {conversations.map((c) => (
+              <div
+                key={c.id}
+                onClick={() => setActive(c)}
+                className={`cursor-pointer rounded p-2 hover:bg-gray-50 ${active && active.id === c.id ? 'bg-gray-100' : ''}`}
+              >
+                <div className="text-sm font-medium">
+                  {c.peer ? c.peer.name : c.title || 'Conversation'}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {c.last_message ? c.last_message.content : ''}
+                </div>
               </div>
             ))}
           </div>
@@ -122,15 +144,31 @@ export default function MessagesPage() {
         {!active && <div className="text-gray-500">Select a conversation</div>}
 
         {active && (
-          <div className="bg-white rounded-lg shadow p-4 flex flex-col h-[70vh]">
-            <div className="font-semibold mb-2">{active.peer ? active.peer.name : 'Conversation'}</div>
-            <div ref={listRef} className="flex-1 overflow-auto space-y-2 mb-3">
-              {messages.map(m => <MessageBubble key={m.id} message={m} />)}
+          <div className="flex h-[70vh] flex-col rounded-lg bg-white p-4 shadow">
+            <div className="mb-2 font-semibold">
+              {active.peer ? active.peer.name : 'Conversation'}
+            </div>
+            <div ref={listRef} className="mb-3 flex-1 space-y-2 overflow-auto">
+              {messages.map((m) => (
+                <MessageBubble key={m.id} message={m} />
+              ))}
             </div>
 
             <form onSubmit={submit} className="flex gap-2">
-              <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { submit(e) } }} className="flex-1 border p-2 rounded" placeholder={canMessage ? 'Write a message...' : 'Cannot message this user'} />
-              <button disabled={!canMessage} className="px-3 py-1 bg-blue-600 text-white rounded">Send</button>
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    submit(e)
+                  }
+                }}
+                className="flex-1 rounded border p-2"
+                placeholder={canMessage ? 'Write a message...' : 'Cannot message this user'}
+              />
+              <button disabled={!canMessage} className="rounded bg-blue-600 px-3 py-1 text-white">
+                Send
+              </button>
             </form>
           </div>
         )}
