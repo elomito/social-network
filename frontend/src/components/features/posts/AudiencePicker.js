@@ -18,3 +18,24 @@ export default function AudiencePicker({ privacy, onAudienceChange, onError }) {
           .split('; ')
           .find(row => row.startsWith('token='))
           ?.split('=')[1];
+const response = await fetch('http://localhost:8080/api/followers', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) throw new Error('Failed to load followers list.');
+
+        const data = await response.json();
+        setFollowers(data.followers || []);
+      } catch (err) {
+        if (onError) onError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFollowers();
+  }, [privacy]);
