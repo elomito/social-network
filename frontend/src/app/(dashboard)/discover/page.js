@@ -91,3 +91,15 @@ export default function DiscoverPage() {
       });
 
       if (!response.ok) throw new Error('Action execution failed.');
+// Refresh locally in-state instantly
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userId ? { ...user, isFollowing: !currentStatus } : user
+        )
+      );
+    } catch (err) {
+      console.error(err.message);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [userId]: false }));
+    }
+  };
