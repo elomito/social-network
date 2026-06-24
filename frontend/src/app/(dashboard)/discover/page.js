@@ -43,3 +43,33 @@ export default function DiscoverPage() {
           .split('; ')
           .find(row => row.startsWith('token='))
           ?.split('=')[1];
+// Targets your Go api server directory configuration
+        const url = `http://localhost:8080/api/users/discover?search=${encodeURIComponent(debouncedQuery)}&page=${page}&limit=12`;
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) throw new Error('Could not fetch user discovery directory.');
+
+        const data = await response.json();
+        const incomingUsers = data.users || [];
+
+        setUsers((prevUsers) => {
+          return page === 1 ? incomingUsers : [...prevUsers, ...incomingUsers];
+        });
+        
+        setHasMore(incomingUsers.length === 12);
+      } catch (err) {
+        console.error(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, [debouncedQuery, page]);
