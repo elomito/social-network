@@ -53,3 +53,19 @@ const response = await fetch('http://localhost:8080/api/followers', {
       if (onError) onError('');
     }
   }, [selectedFollowers, privacy]);
+// Only display component if privacy state is explicitly marked 'private'
+  if (privacy !== 'private') return null;
+
+  const filteredFollowers = followers.filter(follower =>
+    follower.username.toLowerCase().includes(searchQuery.toLowerCase()) &&
+    !selectedFollowers.some(selected => selected.id === follower.id)
+  );
+
+  const handleSelect = (follower) => {
+    setSelectedFollowers([...selectedFollowers, follower]);
+    setSearchQuery('');
+  };
+
+  const handleRemove = (followerId) => {
+    setSelectedFollowers(selectedFollowers.filter(f => f.id !== followerId));
+  };
