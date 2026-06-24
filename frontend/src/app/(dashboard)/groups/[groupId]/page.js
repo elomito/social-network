@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import GroupHeader from '../../../../components/features/groups/GroupHeader'
+import EventCard from '../../../../components/features/groups/EventCard.js'
+import { getGroupEvents, createEvent, updateRSVP } from '../../../../lib/apiClient.js'
 
 async function fetchJSON(url) {
   const res = await fetch(url, { credentials: 'include' })
@@ -13,6 +15,7 @@ export default function GroupPage({ params }) {
   const [members, setMembers] = useState([])
   const [isMember, setIsMember] = useState(false)
   const [posts, setPosts] = useState([])
+  const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -49,6 +52,20 @@ export default function GroupPage({ params }) {
     return () => { mounted = false }
   }, [groupId])
 
+  useEffect(() => {
+    let mounted = true
+    async function loadEvents() {
+      if (!groupId) return
+      try {
+        const ev = await getGroupEvents(groupId, 10, 0)
+        if (!mounted) return
+        setEvents(ev || [])
+      } catch (e) { console.error(e) }
+    }
+    loadEvents()
+    return () => { mounted = false }
+  }, [groupId])
+
   async function handleJoinToggle() {
     try {
       if (!isMember) {
@@ -65,6 +82,22 @@ export default function GroupPage({ params }) {
     } catch (err) {
       console.error(err)
     }
+  }
+
+  async function handleCreateEvent(payload) {
+    try {
+      await createEvent(groupId, payload)
+      const ev = await getGroupEvents(groupId, 10, 0)
+      setEvents(ev || [])
+    } catch (e) { console.error(e) }
+  }
+
+  async function handleRSVP(eventId, status) {
+    try {
+      await updateRSVP(eventId, status)
+      const ev = await getGroupEvents(groupId, 10, 0)
+      setEvents(ev || [])
+    } catch (e) { console.error(e) }
   }
 
   function handleInvite() {
@@ -207,15 +240,31 @@ export default function GroupPage({ params }) {
           <h3 className="text-md font-semibold mb-2">Events</h3>
           {isMember ? (
             <div>
-              <div className="border rounded p-3 mb-3">
-                <div className="text-sm font-medium">Upcoming Event</div>
-                <div className="text-xs text-gray-500">Tomorrow · 6:00 PM</div>
-                <div className="mt-2 flex gap-2">
-                  <button className="px-3 py-1 rounded bg-blue-600 text-white text-sm">Going</button>
-                  <button className="px-3 py-1 rounded border text-sm">Not Going</button>
+              {events.map(event => (
+                <div key={event.id} className="mb-3">
+                  <EventCard event={event} onRSVP={(status) => handleRSVP(event.id, status)} />
                 </div>
+              ))}
+
+              <div className="text-right mb-2"><button className="text-sm text-blue-600">View Events →</button></div>
+
+              <div className="border rounded p-3">
+                <h4 className="font-semibold mb-2">Create Event</h4>
+                <form onSubmit={async (e) => {
+                  e.preventDefault()
+                  const title = e.target.elements.title.value
+                  const description = e.target.elements.description.value
+                  const start_time = e.target.elements.start_time.value
+                  if (!title || !start_time) return
+                  await handleCreateEvent({ title, description, start_time })
+                  e.target.reset()
+                }}>
+                  <input name="title" placeholder="Event title" className="w-full p-2 border rounded mb-2" />
+                  <input name="start_time" type="datetime-local" className="w-full p-2 border rounded mb-2" />
+                  <textarea name="description" placeholder="Description" className="w-full p-2 border rounded mb-2" />
+                  <div className="text-right"><button className="px-3 py-1 bg-green-600 text-white rounded">Create</button></div>
+                </form>
               </div>
-              <div className="text-right"><button className="text-sm text-blue-600">View Events →</button></div>
             </div>
           ) : (
             <div className="text-sm text-gray-500">Join to see events</div>
