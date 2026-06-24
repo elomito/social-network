@@ -8,14 +8,16 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-// Mock initial loading effect for skeleton requirement
+
+  // Mock initial loading effect for skeleton requirement
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoading(false);
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
-return (
+
+  return (
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-6">
       {/* COMPOSER PLACEHOLDER (#68) */}
       <div className="p-4 bg-white rounded-lg shadow border border-gray-200">
@@ -40,3 +42,20 @@ return (
             </div>
           ))
         ) : posts.length === 0 ? (
+          /* EMPTY STATE */
+          <div className="text-center py-12 bg-white rounded-lg shadow border border-gray-100">
+            <p className="text-gray-500 text-lg font-medium">Your feed is quiet right now.</p>
+            <p className="text-gray-400 text-sm mt-1">Follow people to see posts here!</p>
+          </div>
+        ) : (
+          /* LIVE POSTS LIST */
+          posts.map((post) => (
+            <div key={post.id} className="p-4 bg-white rounded-lg shadow">
+              <p className="text-black">Post content placeholder</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
