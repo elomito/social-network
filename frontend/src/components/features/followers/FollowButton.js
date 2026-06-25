@@ -44,3 +44,21 @@ export default function FollowButton({ targetUser, currentUserId, onStateChange 
     }
 // Force UI to update instantly before network completes
     onStateChange(updatedState);
+// 2. DISPATCH NETWORK CALL TO GO BACKEND
+    try {
+      const token = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('token='))
+        ?.split('=')[1];
+
+      const response = await fetch(`http://localhost:8080${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) throw new Error('API request failed');
+    } catch (err) {
+      console.error('Rolling back relationship state adjustment:', err.message);
