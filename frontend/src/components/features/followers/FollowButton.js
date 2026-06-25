@@ -68,3 +68,19 @@ export default function FollowButton({ targetUser, currentUserId, onStateChange 
       setLoading(false);
     }
   };
+// Determine button labels, styling classes, and hover adjustments
+  let buttonText = 'Follow';
+  let buttonStyles = 'bg-blue-600 text-white hover:bg-blue-700';
+
+  if (targetUser.isFollowing) {
+    if (isHovered) {
+      buttonText = 'Unfollow';
+      buttonStyles = 'bg-red-100 text-red-700 border border-red-200';
+    } else {
+      buttonText = 'Following';
+      buttonStyles = 'bg-gray-100 text-gray-700 hover:bg-gray-200';
+    }
+  } else if (targetUser.isRequested) {
+    buttonText = 'Requested';
+    buttonStyles = 'bg-amber-100 text-amber-800 border border-amber-200';
+  }
