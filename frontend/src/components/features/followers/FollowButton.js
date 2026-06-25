@@ -18,3 +18,27 @@ export default function FollowButton({ targetUser, currentUserId, onStateChange 
 
     setShowConfirm(false);
     setLoading(true);
+// Save initial state for a clean rollback if the backend throws an error
+    const previousState = { ...targetUser };
+
+    // 1. OPTIMISTIC UPDATE CALCULATION
+    let updatedState = { ...targetUser };
+    let endpoint = '';
+
+    if (targetUser.isFollowing) {
+      endpoint = `/api/unfollow/${targetUser.id}`;
+      updatedState.isFollowing = false;
+      if (updatedState.followersCount !== undefined) updatedState.followersCount -= 1;
+    } else if (targetUser.isRequested) {
+      endpoint = `/api/follow-requests/cancel/${targetUser.id}`;
+      updatedState.isRequested = false;
+    } else {
+      if (targetUser.isPrivate) {
+        endpoint = `/api/follow/${targetUser.id}`;
+        updatedState.isRequested = true;
+      } else {
+        endpoint = `/api/follow/${targetUser.id}`;
+        updatedState.isFollowing = true;
+        if (updatedState.followersCount !== undefined) updatedState.followersCount += 1;
+      }
+    }
