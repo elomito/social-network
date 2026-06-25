@@ -84,3 +84,43 @@ export default function FollowButton({ targetUser, currentUserId, onStateChange 
     buttonText = 'Requested';
     buttonStyles = 'bg-amber-100 text-amber-800 border border-amber-200';
   }
+return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        disabled={loading}
+        onClick={() => handleAction(false)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${buttonStyles} ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+      >
+        {loading ? '...' : buttonText}
+      </button>
+
+      {/* CONFIRMATION DROPMODAL */}
+      {showConfirm && (
+        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg border border-gray-200 shadow-xl p-3 z-50 space-y-2">
+          <p className="text-[11px] text-gray-600 font-medium leading-tight">
+            Are you sure you want to stop following @{targetUser.username}?
+          </p>
+          <div className="flex items-center justify-end space-x-1.5">
+            <button
+              type="button"
+              onClick={() => setShowConfirm(false)}
+              className="px-2 py-1 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded text-[10px] font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAction(true)}
+              className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-semibold"
+            >
+              Unfollow
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
