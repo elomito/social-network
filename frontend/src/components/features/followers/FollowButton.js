@@ -62,3 +62,9 @@ export default function FollowButton({ targetUser, currentUserId, onStateChange 
       if (!response.ok) throw new Error('API request failed');
     } catch (err) {
       console.error('Rolling back relationship state adjustment:', err.message);
+// ROLLBACK: Revert immediately back to history if server failed
+      onStateChange(previousState);
+    } finally {
+      setLoading(false);
+    }
+  };
