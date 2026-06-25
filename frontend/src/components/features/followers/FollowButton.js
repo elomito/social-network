@@ -42,3 +42,5 @@ export default function FollowButton({ targetUser, currentUserId, onStateChange 
         if (updatedState.followersCount !== undefined) updatedState.followersCount += 1;
       }
     }
+// Force UI to update instantly before network completes
+    onStateChange(updatedState);
