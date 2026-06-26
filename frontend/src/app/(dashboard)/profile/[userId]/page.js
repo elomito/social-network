@@ -1,112 +1,94 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import FollowButton from '@/components/features/followers/FollowButton';
 
-export default function Page({ params }) {
-  const userId = params?.userId
-  const [state, setState] = useState({ status: 'loading', data: null, error: null })
+export default function ProfilePage() {
+  const { userId } = useParams();
+  const [profileUser, setProfileUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   useEffect(() => {
-    if (!userId) return
-    let mounted = true
-    setState({ status: 'loading', data: null, error: null })
+    const fetchProfile = async () => {
+      try {
+        const token = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('token='))
+          ?.split('=')[1];
 
-    fetch(`/api/users?id=${userId}`, { credentials: 'include' })
-      .then(async (res) => {
-        const contentType = res.headers.get('content-type') || ''
-        const payload = contentType.includes('application/json') ? await res.json() : { message: await res.text() }
-        if (!res.ok) throw { status: res.status, payload }
-        return payload
-      })
-      .then((data) => {
-        if (mounted) setState({ status: 'ready', data, error: null })
-      })
-      .catch((err) => {
-        if (mounted) setState({ status: 'error', data: null, error: err })
-      })
+        // 1. Get profile data
+        const response = await fetch(`http://localhost:8080/api/users/profile/${userId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
 
-    return () => {
-      mounted = false
-    }
-  }, [userId])
+        if (!response.ok) throw new Error('Failed to load profile.');
+        const data = await response.json();
+        setProfileUser(data.user);
+        
+        // 2. Decode current user context safely (simulate ID extraction from token/auth context)
+        // In your production app, this safely reads from your useAuth() hook
+        setCurrentUserId("current-auth-user-id"); 
+      } catch (err) {
+        console.error(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  if (state.status === 'loading') return <div className="p-4">Loading profile...</div>
-  if (state.status === 'error') {
-    const msg = state.error?.payload?.message || state.error?.message || 'Unknown error'
-    return <div className="p-4 text-red-600">Error loading profile: {msg}</div>
-  }
+    if (userId) fetchProfile();
+  }, [userId]);
 
-  const u = state.data
-  if (!u) return <div className="p-4">No profile data available.</div>
-
-  // locked view for private profiles to non-followers
-  if (u.locked) {
+  if (loading) {
     return (
-      <div className="p-6 max-w-2xl">
-        <div className="flex items-center space-x-4">
-          <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center text-xl text-gray-700">{u.first_name?.[0] || 'U'}</div>
-          <div>
-            <h1 className="text-2xl font-semibold">{u.first_name} {u.last_name}</h1>
-            <div className="text-sm text-gray-500">🔒 Private profile</div>
-          </div>
-        </div>
-        <div className="mt-4 text-gray-500">This profile is private. Follow to request access.</div>
+      <div className="max-w-2xl mx-auto mt-8 p-6 bg-white rounded-xl shadow-sm animate-pulse space-y-4">
+        <div className="w-20 h-20 bg-gray-200 rounded-full"></div>
+        <div className="h-4 bg-gray-200 rounded w-1/3"></div>
       </div>
-    )
+    );
   }
 
-  // owner-only visibility toggle
-  const [toggling, setToggling] = useState(false)
-  const [isPublic, setIsPublic] = useState(Boolean(u.is_public))
-
-  const onToggle = async () => {
-    if (!u.is_owner || toggling) return
-    const prev = isPublic
-    const next = !prev
-    setIsPublic(next)
-    setToggling(true)
-    try {
-      const res = await fetch('/api/users/visibility', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_public: next }),
-      })
-      if (!res.ok) throw new Error('Failed to update visibility')
-      setToggling(false)
-    } catch (err) {
-      setIsPublic(prev)
-      setToggling(false)
-      alert('Failed to update visibility')
-    }
+  if (!profileUser) {
+    return (
+      <div className="text-center py-12 text-gray-500">
+        Profile entry could not be located.
+      </div>
+    );
   }
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="max-w-2xl mx-auto mt-8 p-6 bg-white rounded-xl border border-gray-200 shadow-sm space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center text-xl text-gray-700">{u.first_name?.[0] || 'U'}</div>
+          <div className="w-20 h-20 bg-gradient-to-tr from-blue-500 to-indigo-600 text-white rounded-full flex items-center justify-center text-2xl font-bold uppercase">
+            {profileUser.username[0]}
+          </div>
           <div>
-            <h1 className="text-2xl font-semibold">{u.first_name} {u.last_name}</h1>
-            {u.nickname && <div className="text-sm text-gray-500">@{u.nickname}</div>}
+            <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              {profileUser.username}
+              {profileUser.isPrivate && <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">🔒 Private</span>}
+            </h1>
+            <p className="text-sm text-gray-500">{profileUser.fullName || 'Network Peer'}</p>
           </div>
         </div>
 
-        {u.is_owner && (
-          <div className="flex items-center space-x-2">
-            <label className="text-sm text-gray-600">Public</label>
-            <button onClick={onToggle} disabled={toggling} className="p-2 bg-gray-100 rounded">
-              {isPublic ? '🔓' : '🔒'}
-            </button>
-          </div>
-        )}
+        {/* REUSABLE FOLLOW BUTTON HANDLING STATE OPTIMISTICALLY WITH ROLLBACK */}
+        <FollowButton 
+          targetUser={profileUser}
+          currentUserId={currentUserId}
+          onStateChange={(updatedState) => setProfileUser(updatedState)}
+        />
       </div>
 
-      {u.about_me ? (
-        <div className="mt-4 text-gray-800">{u.about_me}</div>
-      ) : (
-        <div className="mt-4 text-gray-500 italic">No bio provided.</div>
-      )}
+      <div className="flex space-x-6 border-t border-b border-gray-100 py-3 text-sm text-gray-600">
+        <div><strong className="text-gray-900">{profileUser.followingCount || 0}</strong> Following</div>
+        <div><strong className="text-gray-900">{profileUser.followersCount || 0}</strong> Followers</div>
+      </div>
     </div>
-  )
+  );
 }
