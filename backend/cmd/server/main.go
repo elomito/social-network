@@ -71,6 +71,7 @@ func main() {
 	mux.Handle("/api/follow", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.FollowHandler(followService))))
 	mux.Handle("/api/unfollow", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.UnfollowHandler(followService))))
 	mux.Handle("/api/follow/status", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.FollowStatusHandler(followService))))
+	mux.Handle("/api/followers", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.GetFollowersHandler(sqliteConn, followService))))
 
 	// Event routes
 	mux.Handle("/api/events", middleware.Auth(sqliteConn)(http.HandlerFunc(eventHandler.CreateEvent)))
@@ -221,6 +222,7 @@ func main() {
 		}
 	})))
 	mux.Handle("/api/notifications/read", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.MarkNotificationReadHandler(notificationService))))
+	mux.Handle("/api/notifications/read-all", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.MarkAllNotificationsReadHandler(notificationService))))
 
 	mux.Handle("/", http.FileServer(http.Dir("../frontend/public")))
 

@@ -106,3 +106,24 @@ func MarkNotificationReadHandler(svc *services.NotificationService) http.Handler
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+// MarkAllNotificationsReadHandler marks all notifications for the user as read
+func MarkAllNotificationsReadHandler(svc *services.NotificationService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uidStr := middleware.GetUserID(r)
+		if uidStr == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID, err := uuid.Parse(uidStr)
+		if err != nil {
+			http.Error(w, "invalid user", http.StatusBadRequest)
+			return
+		}
+		if err := svc.MarkAllRead(r.Context(), userID); err != nil {
+			http.Error(w, "failed", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

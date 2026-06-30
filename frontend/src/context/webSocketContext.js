@@ -8,7 +8,7 @@ import { WS_URL } from '@/lib/config'
 const WebSocketContext = createContext(null)
 
 export function WebSocketProvider({ children }) {
-  const { token, isAuthenticated } = useAuth()
+  const { token, isAuthenticated, user } = useAuth()
   const [connectionStatus, setConnectionStatus] = useState('DISCONNECTED') // DISCONNECTED, CONNECTING, CONNECTED, RECONNECTING
 
   const wsRef = useRef(null)
@@ -51,8 +51,8 @@ export function WebSocketProvider({ children }) {
 
     setConnectionStatus((prev) => (prev === 'DISCONNECTED' ? 'CONNECTING' : 'RECONNECTING'))
 
-    // Append token as a query parameter for authentication verification
-    const socketUrl = `${WS_URL}?token=${encodeURIComponent(token)}`
+    // Append user_id and token as query parameters for authentication verification
+    const socketUrl = `${WS_URL}?user_id=${encodeURIComponent(user?.id || '')}&token=${encodeURIComponent(token)}`
     const ws = new WebSocket(socketUrl)
     wsRef.current = ws
 
@@ -125,7 +125,7 @@ export function WebSocketProvider({ children }) {
     return () => {
       disconnect()
     }
-  }, [isAuthenticated, token, connect, disconnect])
+  }, [isAuthenticated, token, user, connect, disconnect])
 
   const value = {
     connectionStatus,

@@ -15,17 +15,10 @@ export default function AudiencePicker({ privacy, onAudienceChange, onError }) {
     const fetchFollowers = async () => {
       try {
         setLoading(true)
-        const token = document.cookie
-          .split('; ')
-          .find((row) => row.startsWith('token='))
-          ?.split('=')[1]
 
-        const response = await fetch('http://localhost:8080/api/followers', {
+        const response = await fetch('/api/followers', {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
         })
 
         if (!response.ok) throw new Error('Failed to load followers list.')

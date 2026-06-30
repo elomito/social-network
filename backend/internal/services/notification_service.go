@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/google/uuid"
 	"backend/internal/models"
+
+	"github.com/google/uuid"
 )
 
 // NotificationService manages notifications
@@ -35,6 +36,12 @@ func (s *NotificationService) Create(ctx context.Context, n models.Notification)
 // MarkRead marks a notification as read
 func (s *NotificationService) MarkRead(ctx context.Context, id uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE notifications SET is_read = 1 WHERE id = ?`, id.String())
+	return err
+}
+
+// MarkAllRead marks all notifications for a user as read
+func (s *NotificationService) MarkAllRead(ctx context.Context, recipientID uuid.UUID) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE notifications SET is_read = 1 WHERE recipient_id = ? AND is_read = 0`, recipientID.String())
 	return err
 }
 

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -43,29 +42,26 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var req WSConnectRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
+	// Read user_id and token from query parameters (WebSocket upgrade can't have a body)
+	userIDStr := r.URL.Query().Get("user_id")
+	token := r.URL.Query().Get("token")
+
+	if userIDStr == "" || token == "" {
 		conn.Close()
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		http.Error(w, "missing user_id or token", http.StatusBadRequest)
 		return
 	}
 
-	userID, err := uuid.Parse(req.UserID)
+	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		conn.Close()
 		http.Error(w, "invalid user ID", http.StatusBadRequest)
 		return
 	}
 
-	if req.Token == "" {
-		conn.Close()
-		http.Error(w, "token required", http.StatusUnauthorized)
-		return
-	}
-
 	var session models.Session
 	err = h.db.QueryRowContext(r.Context(),
-		"SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", req.Token).
+		"SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", token).
 		Scan(&session.ID, &session.UserID, &session.ExpiresAt, &session.CreatedAt)
 	if err != nil {
 		conn.Close()

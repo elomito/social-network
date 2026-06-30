@@ -19,7 +19,6 @@ export default function PostDetailPage({ params }) {
   const [submitting, setSubmitting] = useState(false)
   const [optimisticComments, setOptimisticComments] = useState([])
 
-  // Fetch post and comments
   useEffect(() => {
     if (!postId) return
 
@@ -30,8 +29,7 @@ export default function PostDetailPage({ params }) {
         setError('')
         setCommentsError('')
 
-        // Fetch post
-        const postResponse = await fetch(`http://localhost:8080/api/posts/${postId}`, {
+        const postResponse = await fetch(`/api/posts/${postId}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -52,8 +50,7 @@ export default function PostDetailPage({ params }) {
         const postData = await postResponse.json()
         setPost(postData)
 
-        // Fetch comments
-        const commentsResponse = await fetch(`http://localhost:8080/api/posts/${postId}/comments`, {
+        const commentsResponse = await fetch(`/api/posts/${postId}/comments`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -78,14 +75,12 @@ export default function PostDetailPage({ params }) {
     fetchPostAndComments()
   }, [postId])
 
-  // Handle comment submission with optimistic updates
   const handleCommentSubmit = async (e) => {
     e.preventDefault()
     if (!newComment.trim() && !imageFile && !gifUrl) return
 
     setSubmitting(true)
 
-    // Create optimistic comment
     const optimisticComment = {
       id: `temp-${Date.now()}`,
       authorName: 'You',
@@ -95,11 +90,9 @@ export default function PostDetailPage({ params }) {
       isOptimistic: true,
     }
 
-    // Add optimistic comment immediately
     setOptimisticComments((prev) => [...prev, optimisticComment])
     setComments((prev) => [...prev, optimisticComment])
 
-    // Clear form
     const commentText = newComment
     setNewComment('')
     setImageFile(null)
@@ -107,12 +100,9 @@ export default function PostDetailPage({ params }) {
     setGifUrl('')
 
     try {
-      // Build request body - handle image upload if present
       let imageId = null
       if (imageFile) {
-        // For now, we'll use a placeholder - in production this would upload to a service
-        // The backend expects an image_id, not a URL
-        const uploadResponse = await fetch('http://localhost:8080/api/images/upload', {
+        const uploadResponse = await fetch('/api/images/upload', {
           method: 'POST',
           credentials: 'include',
           body: (() => {
@@ -128,7 +118,7 @@ export default function PostDetailPage({ params }) {
         }
       }
 
-      const response = await fetch(`http://localhost:8080/api/posts/${postId}/comments`, {
+      const response = await fetch(`/api/posts/${postId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -146,7 +136,6 @@ export default function PostDetailPage({ params }) {
 
       const data = await response.json()
 
-      // Replace optimistic comment with real one
       setOptimisticComments((prev) => prev.filter((c) => c.id !== optimisticComment.id))
       setComments((prev) =>
         prev
@@ -154,7 +143,6 @@ export default function PostDetailPage({ params }) {
           .filter((c) => c.id !== optimisticComment.id || c.isOptimistic)
       )
 
-      // Update post comment count optimistically
       if (post) {
         setPost((prev) => ({
           ...prev,
@@ -162,7 +150,6 @@ export default function PostDetailPage({ params }) {
         }))
       }
     } catch (err) {
-      // Revert optimistic update on failure
       setOptimisticComments((prev) => prev.filter((c) => c.id !== optimisticComment.id))
       setComments((prev) => prev.filter((c) => c.id !== optimisticComment.id))
       setCommentsError(err.message)
@@ -171,22 +158,21 @@ export default function PostDetailPage({ params }) {
     }
   }
 
-  // Combine real and optimistic comments
   const allComments = [...comments, ...optimisticComments]
 
   if (loading) {
     return (
       <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-        <div className="animate-pulse space-y-4 rounded-lg bg-white p-6 shadow">
-          <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 rounded-full bg-gray-200"></div>
+        <div className="animate-pulse space-y-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-full bg-gray-200" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 w-1/4 rounded bg-gray-200"></div>
-              <div className="h-3 w-1/6 rounded bg-gray-200"></div>
+              <div className="h-4 w-1/4 rounded bg-gray-200" />
+              <div className="h-3 w-1/6 rounded bg-gray-200" />
             </div>
           </div>
-          <div className="h-4 w-full rounded bg-gray-200"></div>
-          <div className="h-4 w-5/6 rounded bg-gray-200"></div>
+          <div className="h-4 w-full rounded bg-gray-200" />
+          <div className="h-4 w-5/6 rounded bg-gray-200" />
         </div>
       </div>
     )
@@ -195,7 +181,7 @@ export default function PostDetailPage({ params }) {
   if (error) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
           {error}
         </div>
       </div>
@@ -205,8 +191,14 @@ export default function PostDetailPage({ params }) {
   if (!post) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
-        <div className="rounded-lg border border-gray-100 bg-white p-4 text-center">
-          <p className="text-gray-500">Post not found</p>
+        <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+            <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m0 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Post not found</h3>
+          <p className="mt-1 text-sm text-gray-500">This post may have been removed or is private.</p>
         </div>
       </div>
     )
@@ -214,15 +206,17 @@ export default function PostDetailPage({ params }) {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-      {/* Post content */}
       <PostCard post={post} />
 
-      {/* Comments section */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-800">Comments ({allComments.length})</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-900">
+            Comments ({allComments.length})
+          </h3>
+        </div>
 
         {commentsError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
             {commentsError}
           </div>
         )}
@@ -230,7 +224,6 @@ export default function PostDetailPage({ params }) {
         <CommentList comments={allComments} loading={loadingComments} error="" />
       </div>
 
-      {/* Comment composer */}
       <CommentComposer
         newComment={newComment}
         setNewComment={setNewComment}
@@ -247,7 +240,6 @@ export default function PostDetailPage({ params }) {
   )
 }
 
-// CommentComposer component - mirrors post composer functionality
 function CommentComposer({
   newComment,
   setNewComment,
@@ -261,52 +253,56 @@ function CommentComposer({
   submitting,
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
       <form onSubmit={onSubmit}>
         <textarea
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
           placeholder="Write a comment..."
-          rows="3"
-          className="w-full rounded border border-gray-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows={3}
+          className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           disabled={submitting}
         />
 
-        {/* Image preview */}
         {imagePreview && (
-          <div className="relative mt-2">
-            <img src={imagePreview} alt="Preview" className="max-h-48 rounded-lg object-cover" />
+          <div className="relative mt-3">
+            <img src={imagePreview} alt="Preview" className="max-h-48 rounded-xl object-cover" />
             <button
               type="button"
               onClick={() => {
                 setImagePreview('')
                 setImageFile(null)
               }}
-              className="absolute right-1 top-1 rounded-full bg-gray-800 bg-opacity-50 px-1.5 py-0.5 text-xs text-white"
+              className="absolute right-2 top-2 rounded-full bg-gray-900/60 p-1.5 text-white transition hover:bg-gray-900/80"
             >
-              ×
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         )}
 
-        {/* GIF preview */}
         {gifUrl && (
-          <div className="relative mt-2">
-            <img src={gifUrl} alt="GIF Preview" className="max-h-48 rounded-lg object-cover" />
+          <div className="relative mt-3">
+            <img src={gifUrl} alt="GIF Preview" className="max-h-48 rounded-xl object-cover" />
             <button
               type="button"
               onClick={() => setGifUrl('')}
-              className="absolute right-1 top-1 rounded-full bg-gray-800 bg-opacity-50 px-1.5 py-0.5 text-xs text-white"
+              className="absolute right-2 top-2 rounded-full bg-gray-900/60 p-1.5 text-white transition hover:bg-gray-900/80"
             >
-              ×
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         )}
 
         <div className="mt-3 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <label className="cursor-pointer text-xs text-gray-500 hover:text-blue-600">
-              📎 Image
+          <div className="flex items-center gap-3">
+            <label className="cursor-pointer rounded-lg p-2 text-gray-500 transition hover:bg-blue-50 hover:text-blue-600">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+              </svg>
               <input
                 type="file"
                 accept="image/*"
@@ -326,21 +322,25 @@ function CommentComposer({
               />
             </label>
             <span className="text-xs text-gray-300">|</span>
-            <label className="text-xs text-gray-500">
-              GIF URL:
+            <label className="flex items-center gap-1.5 text-xs text-gray-500">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+              </svg>
+              GIF
               <input
                 type="url"
                 value={gifUrl}
                 onChange={(e) => setGifUrl(e.target.value)}
                 placeholder="https://giphy.com/..."
-                className="ml-1 w-48 rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+                className="w-32 rounded-lg border border-gray-200 bg-gray-50/50 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </label>
           </div>
+
           <button
             type="submit"
             disabled={submitting || (!newComment.trim() && !imagePreview && !gifUrl)}
-            className="rounded bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/30 transition-all duration-200 hover:shadow-md hover:shadow-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95"
           >
             {submitting ? 'Posting...' : 'Comment'}
           </button>

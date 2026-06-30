@@ -7,6 +7,7 @@ export default function Avatar({ src, alt, size = 'md', fallback, className = ''
     md: 'h-10 w-10 text-base',
     lg: 'h-12 w-12 text-lg',
     xl: 'h-16 w-16 text-xl',
+    '2xl': 'h-20 w-20 text-2xl',
   }
 
   const sizeClass = sizeClasses[size] || sizeClasses.md
@@ -23,7 +24,7 @@ export default function Avatar({ src, alt, size = 'md', fallback, className = ''
 
   return (
     <div
-      className={`flex items-center justify-center rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 font-bold text-white ${sizeClass} ${className}`}
+      className={`flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 font-bold text-white ${sizeClass} ${className}`}
     >
       {fallback || '?'}
     </div>

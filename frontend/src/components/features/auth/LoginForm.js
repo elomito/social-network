@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function LoginForm() {
   const [email, setEmail] = useState('')
@@ -9,6 +10,7 @@ export default function LoginForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const { setToken } = useAuth()
 
   const validateForm = () => {
     if (!email.includes('@')) {
@@ -21,6 +23,7 @@ export default function LoginForm() {
     }
     return true
   }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
@@ -29,7 +32,7 @@ export default function LoginForm() {
     setLoading(true)
 
     try {
-      const response = await fetch('http://localhost:8080/api/auth/login', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -43,7 +46,8 @@ export default function LoginForm() {
         throw new Error(data.message || 'Login failed')
       }
 
-      // Login successful - session cookie is set by backend
+      // Set token to trigger auth state update
+      setToken('valid_session')
       router.push('/feed')
     } catch (err) {
       setError(err.message)
@@ -51,56 +55,69 @@ export default function LoginForm() {
       setLoading(false)
     }
   }
-  return (
-    <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-md">
-      <h2 className="mb-6 text-center text-2xl font-bold text-gray-800">Login to Social Network</h2>
 
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="mb-4 rounded border border-red-200 bg-red-100 p-3 text-sm text-red-600">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Email Address</label>
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Email Address</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          required
+          placeholder="name@example.com"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          required
+          placeholder="••••••••"
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-2">
           <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-            placeholder="name@example.com"
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-            placeholder="••••••••"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded bg-blue-600 px-4 py-2 font-semibold text-white transition duration-200 hover:bg-blue-700 disabled:bg-blue-300"
-        >
-          {loading ? 'Logging in...' : 'Sign In'}
-        </button>
-      </form>
-
-      <p className="mt-4 text-center text-sm text-gray-600">
-        Don't have an account?{' '}
-        <a href="/auth/register" className="font-medium text-blue-600 hover:text-blue-700">
-          Sign up
+          <span className="text-sm text-gray-600">Remember me</span>
+        </label>
+        <a href="#" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+          Forgot password?
         </a>
-      </p>
-    </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-500/30 transition-all duration-200 hover:shadow-md hover:shadow-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Signing in...
+          </span>
+        ) : (
+          'Sign In'
+        )}
+      </button>
+    </form>
   )
 }

@@ -24,12 +24,13 @@ export function NotificationProvider({ children }) {
   }, [])
 
   // 2. Consume Shared WS Layer, filtering exclusively for 'notification' frames
-  const { connected, connectionStatus } = useWebSocket('notification')
+  const ws = useWebSocket('notification')
+  const { connected, connectionStatus } = ws
 
   // 3. Handle live incoming notifications
   useEffect(() => {
     // If we're using the backwards-compatible useWebSocket, it returns an onMessage binder
-    const { onMessage } = useWebSocket('notification')
+    const { onMessage } = ws
 
     const unsubscribe = onMessage((message) => {
       // Expecting standard format payload or flat fallback object structure

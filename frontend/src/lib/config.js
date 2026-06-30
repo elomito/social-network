@@ -1,2 +1,2 @@
-// src/lib/config.js
+// WebSocket URL - points directly to backend since Next.js rewrites don't proxy WebSocket
 export const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws'

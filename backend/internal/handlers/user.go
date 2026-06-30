@@ -304,6 +304,44 @@ func DiscoverUsersHandler(db *sql.DB, followSvc *services.FollowService) http.Ha
 	}
 }
 
+// GetFollowersHandler returns a list of users who follow the authenticated user
+func GetFollowersHandler(db *sql.DB, followSvc *services.FollowService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uidStr := middleware.GetUserID(r)
+		if uidStr == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID, err := uuid.Parse(uidStr)
+		if err != nil {
+			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		followerIDs := followSvc.GetFollowers(userID)
+		followers := make([]map[string]interface{}, 0, len(followerIDs))
+		for _, fid := range followerIDs {
+			user, err := services.NewUserService(db).GetByID(r.Context(), fid)
+			if err != nil {
+				continue
+			}
+			username := ""
+			if user.Nickname != nil && *user.Nickname != "" {
+				username = *user.Nickname
+			} else {
+				username = user.Email
+			}
+			followers = append(followers, map[string]interface{}{
+				"id":       user.ID.String(),
+				"username": username,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"followers": followers})
+	}
+}
+
 // FollowStatusHandler checks if one user is following another
 func FollowStatusHandler(svc *services.FollowService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

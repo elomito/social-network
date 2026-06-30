@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const API_BASE_URL = 'http://localhost:8080'
+// Use relative URLs - Next.js proxy will forward to backend
+const API_BASE_URL = ''
 
 // Create axios instance
 const api = axios.create({
@@ -23,7 +24,7 @@ api.interceptors.response.use(
 
 // API functions for groups
 export async function getGroupMembers(groupId) {
-  const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}/members`, {
+  const response = await fetch(`/api/groups/${groupId}/members`, {
     credentials: 'include',
   })
   if (!response.ok) throw new Error('Failed to fetch group members')
@@ -31,7 +32,7 @@ export async function getGroupMembers(groupId) {
 }
 
 export async function getGroupInvitations(groupId) {
-  const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}/invitations`, {
+  const response = await fetch(`/api/groups/${groupId}/invitations`, {
     credentials: 'include',
   })
   if (!response.ok) throw new Error('Failed to fetch group invitations')
@@ -39,7 +40,7 @@ export async function getGroupInvitations(groupId) {
 }
 
 export async function sendGroupInvite(groupId, inviteeId) {
-  const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}/invitations`, {
+  const response = await fetch(`/api/groups/${groupId}/invitations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -51,7 +52,7 @@ export async function sendGroupInvite(groupId, inviteeId) {
 
 export async function respondToInvite(groupId, invitationId, accept) {
   const response = await fetch(
-    `${API_BASE_URL}/api/groups/${groupId}/invitations/${invitationId}/respond`,
+    `/api/groups/${groupId}/invitations/${invitationId}/respond`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -64,7 +65,7 @@ export async function respondToInvite(groupId, invitationId, accept) {
 }
 
 export async function requestJoinGroup(groupId) {
-  const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}/join`, {
+  const response = await fetch(`/api/groups/${groupId}/join`, {
     method: 'POST',
     credentials: 'include',
   })
@@ -73,7 +74,7 @@ export async function requestJoinGroup(groupId) {
 }
 
 export async function getGroupJoinRequests(groupId) {
-  const response = await fetch(`${API_BASE_URL}/api/groups/${groupId}/join-requests`, {
+  const response = await fetch(`/api/groups/${groupId}/join-requests`, {
     credentials: 'include',
   })
   if (!response.ok) throw new Error('Failed to fetch join requests')
@@ -82,7 +83,7 @@ export async function getGroupJoinRequests(groupId) {
 
 export async function respondToJoinRequest(groupId, requestId, approve) {
   const response = await fetch(
-    `${API_BASE_URL}/api/groups/${groupId}/join-requests/${requestId}/respond`,
+    `/api/groups/${groupId}/join-requests/${requestId}/respond`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -96,7 +97,7 @@ export async function respondToJoinRequest(groupId, requestId, approve) {
 
 export async function getGroupEvents(groupId, limit = 10, offset = 0) {
   const response = await fetch(
-    `${API_BASE_URL}/api/groups/${groupId}/events?limit=${limit}&offset=${offset}`,
+    `/api/groups/${groupId}/events?limit=${limit}&offset=${offset}`,
     {
       credentials: 'include',
     }
@@ -106,7 +107,7 @@ export async function getGroupEvents(groupId, limit = 10, offset = 0) {
 }
 
 export async function getCurrentUser() {
-  const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+  const response = await fetch(`/api/auth/me`, {
     credentials: 'include',
   })
   if (!response.ok) return null
@@ -114,7 +115,7 @@ export async function getCurrentUser() {
 }
 
 export async function getNotifications() {
-  const response = await fetch(`${API_BASE_URL}/api/notifications`, {
+  const response = await fetch(`/api/notifications`, {
     credentials: 'include',
   })
   if (!response.ok) throw new Error('Failed to fetch notifications')
@@ -122,7 +123,7 @@ export async function getNotifications() {
 }
 
 export async function getConversations() {
-  const response = await fetch(`${API_BASE_URL}/api/conversations`, {
+  const response = await fetch(`/api/conversations`, {
     credentials: 'include',
   })
   if (!response.ok) throw new Error('Failed to fetch conversations')
@@ -131,7 +132,7 @@ export async function getConversations() {
 
 export async function getConversationMessages(conversationId, limit = 50, offset = 0) {
   const response = await fetch(
-    `${API_BASE_URL}/api/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}`,
+    `/api/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}`,
     {
       credentials: 'include',
     }
@@ -141,7 +142,7 @@ export async function getConversationMessages(conversationId, limit = 50, offset
 }
 
 export async function sendPrivateMessage(conversationId, content) {
-  const response = await fetch(`${API_BASE_URL}/api/conversations/${conversationId}/messages`, {
+  const response = await fetch(`/api/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -152,7 +153,7 @@ export async function sendPrivateMessage(conversationId, content) {
 }
 
 export async function getOrCreateConversationWith(peerId) {
-  const response = await fetch(`${API_BASE_URL}/api/conversations/with/${peerId}`, {
+  const response = await fetch(`/api/conversations/peer?peerId=${peerId}`, {
     method: 'POST',
     credentials: 'include',
   })
@@ -161,7 +162,7 @@ export async function getOrCreateConversationWith(peerId) {
 }
 
 export async function getFollowStatus(userId) {
-  const response = await fetch(`${API_BASE_URL}/api/follow/status?user_id=${userId}`, {
+  const response = await fetch(`/api/follow/status?user_id=${userId}`, {
     credentials: 'include',
   })
   if (!response.ok) throw new Error('Failed to get follow status')

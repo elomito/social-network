@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function RegisterForm() {
   const [formData, setFormData] = useState({
@@ -18,6 +19,7 @@ export default function RegisterForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const { setToken } = useAuth()
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -59,7 +61,7 @@ export default function RegisterForm() {
     setLoading(true)
 
     try {
-      const response = await fetch('http://localhost:8080/api/auth/register', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -86,7 +88,7 @@ export default function RegisterForm() {
       }
 
       // Auto-login after registration
-      const loginResponse = await fetch('http://localhost:8080/api/auth/login', {
+      const loginResponse = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -99,7 +101,7 @@ export default function RegisterForm() {
       })
 
       if (loginResponse.ok) {
-        // The backend sets a session cookie, redirect to feed
+        setToken('valid_session')
         router.push('/feed')
       } else {
         router.push('/auth/login')
@@ -112,147 +114,146 @@ export default function RegisterForm() {
   }
 
   return (
-    <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-md">
-      <h2 className="mb-6 text-center text-2xl font-bold text-gray-800">Create Account</h2>
-
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="mb-4 rounded border border-red-200 bg-red-100 p-3 text-sm text-red-600">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">First Name</label>
-            <input
-              type="text"
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange}
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Last Name</label>
-            <input
-              type="text"
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange}
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-        </div>
-
+      <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Email Address</label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-            placeholder="name@example.com"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Nickname (optional)</label>
+          <label className="block text-sm font-medium text-gray-700">First Name</label>
           <input
             type="text"
-            name="nickname"
-            value={formData.nickname}
+            name="firstName"
+            value={formData.firstName}
             onChange={handleChange}
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="How others see your name"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
-          <input
-            type="date"
-            name="dateOfBirth"
-            value={formData.dateOfBirth}
-            onChange={handleChange}
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             required
           />
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700">About Me (optional)</label>
-          <textarea
-            name="aboutMe"
-            value={formData.aboutMe}
-            onChange={handleChange}
-            rows={3}
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Tell us about yourself..."
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
+          <label className="block text-sm font-medium text-gray-700">Last Name</label>
           <input
-            type="checkbox"
-            name="isPublic"
-            id="isPublic"
-            checked={formData.isPublic}
+            type="text"
+            name="lastName"
+            value={formData.lastName}
             onChange={handleChange}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          <label htmlFor="isPublic" className="text-sm text-gray-700">
-            Make my profile public
-          </label>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Password</label>
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             required
-            placeholder="••••••••"
-            minLength={6}
           />
         </div>
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
-          <input
-            type="password"
-            name="confirmPassword"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-            placeholder="••••••••"
-            minLength={6}
-          />
-        </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Email Address</label>
+        <input
+          type="email"
+          name="email"
+          value={formData.email}
+          onChange={handleChange}
+          className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          required
+          placeholder="name@example.com"
+        />
+      </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded bg-blue-600 px-4 py-2 font-semibold text-white transition duration-200 hover:bg-blue-700 disabled:bg-blue-300"
-        >
-          {loading ? 'Creating Account...' : 'Sign Up'}
-        </button>
-      </form>
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Nickname (optional)</label>
+        <input
+          type="text"
+          name="nickname"
+          value={formData.nickname}
+          onChange={handleChange}
+          className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          placeholder="How others see your name"
+        />
+      </div>
 
-      <p className="mt-4 text-center text-sm text-gray-600">
-        Already have an account?{' '}
-        <a href="/auth/login" className="font-medium text-blue-600 hover:text-blue-700">
-          Sign in
-        </a>
-      </p>
-    </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+        <input
+          type="date"
+          name="dateOfBirth"
+          value={formData.dateOfBirth}
+          onChange={handleChange}
+          className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">About Me (optional)</label>
+        <textarea
+          name="aboutMe"
+          value={formData.aboutMe}
+          onChange={handleChange}
+          rows={3}
+          className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          placeholder="Tell us about yourself..."
+        />
+      </div>
+
+      <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+        <input
+          type="checkbox"
+          name="isPublic"
+          id="isPublic"
+          checked={formData.isPublic}
+          onChange={handleChange}
+          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+        <label htmlFor="isPublic" className="text-sm text-gray-700">
+          Make my profile public
+        </label>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Password</label>
+        <input
+          type="password"
+          name="password"
+          value={formData.password}
+          onChange={handleChange}
+          className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          required
+          placeholder="••••••••"
+          minLength={6}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
+        <input
+          type="password"
+          name="confirmPassword"
+          value={formData.confirmPassword}
+          onChange={handleChange}
+          className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          required
+          placeholder="••••••••"
+          minLength={6}
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-500/30 transition-all duration-200 hover:shadow-md hover:shadow-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Creating Account...
+          </span>
+        ) : (
+          'Sign Up'
+        )}
+      </button>
+    </form>
   )
 }
