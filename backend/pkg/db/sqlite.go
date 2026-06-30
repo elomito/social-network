@@ -23,6 +23,19 @@ import (
 // - SQLite allows only ONE writer at a time
 // - Too many connections = "database is locked" errors
 // - We limit connections to prevent this
+
+type Config struct {
+	FilePath        string
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+}
+
+type DB struct {
+	conn *sql.DB
+}
+
+
 func NewSQLite(cfg Config) (*DB, error) {
 	// Validate configuration
 	if cfg.FilePath == "" {

@@ -210,7 +210,6 @@ func StartSession(db *sql.DB, userID string) (models.Session, error) {
 
 	return session, nil
 }
-}
 
 func GetSessionFromDB(db *sql.DB, sessionID string) (models.Session, error) {
 	var session models.Session
