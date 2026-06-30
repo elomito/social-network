@@ -1,5 +1,14 @@
 package handlers
 
+import (
+	"encoding/json"
+	"net/http"
+
+	"backend/internal/services"
+
+	"github.com/google/uuid"
+)
+
 // AddComment handles POST /posts/:id/comments requests
 
 func (h *postHandler) AddComment(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +27,7 @@ func (h *postHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse request body
-	var req AddCommentRequest
+	var req services.AddCommentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return

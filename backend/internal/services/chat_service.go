@@ -98,7 +98,6 @@ func (s *ChatService) validateUserExists(ctx context.Context, userID uuid.UUID) 
 			WHERE id = ? AND deleted_at IS NULL
 		)
 	`, userID)
-
 	if err != nil {
 		return fmt.Errorf("failed to validate user: %w", err)
 	}
@@ -120,7 +119,6 @@ func (s *ChatService) validateGroupMembership(ctx context.Context, userID, group
 			AND g.is_active = 1
 		)
 	`, userID, groupID)
-
 	if err != nil {
 		return fmt.Errorf("failed to validate group membership: %w", err)
 	}
@@ -141,7 +139,6 @@ func (s *ChatService) SendPrivateMessage(
 	senderID, recipientID uuid.UUID,
 	content string,
 ) (*models.PrivateMessage, error) {
-
 	if content == "" {
 		return nil, errors.New("message content cannot be empty")
 	}
@@ -179,7 +176,6 @@ func (s *ChatService) SendPrivateMessage(
 		msg.IsRead,
 		msg.CreatedAt,
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to send private message: %w", err)
 	}
@@ -198,7 +194,6 @@ func (s *ChatService) SendGroupMessage(
 	senderID, groupID uuid.UUID,
 	content string,
 ) (*models.GroupMessage, error) {
-
 	if content == "" {
 		return nil, errors.New("message content cannot be empty")
 	}
@@ -230,7 +225,6 @@ func (s *ChatService) SendGroupMessage(
 		msg.Content,
 		msg.CreatedAt,
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to send group message: %w", err)
 	}
@@ -246,7 +240,7 @@ func (s *ChatService) SendGroupMessage(
 		}
 
 		b, _ := json.Marshal(payload)
-		s.hub.BroadcastToRoom(groupID.String(), b)
+		s.hub.BroadcastToRoom(groupID, b)
 	}
 
 	return msg, nil
@@ -263,7 +257,6 @@ func (s *ChatService) GetGroupMessageHistory(
 	groupID uuid.UUID,
 	limit, offset int,
 ) ([]*models.GroupMessage, error) {
-
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, group_id, sender_id, content, created_at
 		FROM group_messages
@@ -271,7 +264,6 @@ func (s *ChatService) GetGroupMessageHistory(
 		ORDER BY datetime(created_at) ASC, id ASC
 		LIMIT ? OFFSET ?
 	`, groupID, limit, offset)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group message history: %w", err)
 	}

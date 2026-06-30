@@ -268,7 +268,7 @@ func (h *GroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 		r.Context(),
 		services.GroupFilter{
 			Title:     title,
-			CreatorID: creatorID,
+			CreatorID: &creatorID,
 			IsActive:  isActive,
 		},
 		services.Pagination{

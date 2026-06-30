@@ -117,7 +117,6 @@ func (s *GroupService) GetGroupByID(ctx context.Context, groupID uuid.UUID) (*mo
 		&group.UpdatedAt,
 		&isActive,
 	)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrGroupNotFound
@@ -217,7 +216,6 @@ func (s *GroupService) IsMember(ctx context.Context, userID, groupID uuid.UUID) 
 		FROM group_members
 		WHERE group_id = ? AND user_id = ?
 	`, groupID.String(), userID.String()).Scan(&count)
-
 	if err != nil {
 		return false, err
 	}
@@ -235,7 +233,6 @@ func (s *GroupService) JoinGroup(ctx context.Context, userID, groupID uuid.UUID)
 		WHERE id = ?
 		LIMIT 1
 	`, groupID.String()).Scan(&isActive)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrGroupNotFound
@@ -259,7 +256,6 @@ func (s *GroupService) JoinGroup(ctx context.Context, userID, groupID uuid.UUID)
 		"member",
 		time.Now().UTC(),
 	)
-
 	if err != nil {
 		return ErrAlreadyMember
 	}
@@ -277,7 +273,6 @@ func (s *GroupService) LeaveGroup(ctx context.Context, userID, groupID uuid.UUID
 		WHERE id = ?
 		LIMIT 1
 	`, groupID.String()).Scan(&creatorID)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrGroupNotFound
@@ -293,7 +288,6 @@ func (s *GroupService) LeaveGroup(ctx context.Context, userID, groupID uuid.UUID
 		DELETE FROM group_members
 		WHERE group_id = ? AND user_id = ?
 	`, groupID.String(), userID.String())
-
 	if err != nil {
 		return err
 	}
@@ -307,4 +301,110 @@ func (s *GroupService) LeaveGroup(ctx context.Context, userID, groupID uuid.UUID
 	}
 
 	return nil
+}
+
+// GroupFilter represents filters for querying groups
+type GroupFilter struct {
+	Title     string
+	CreatorID *uuid.UUID
+	IsActive  *bool
+}
+
+// Pagination represents pagination parameters
+type Pagination struct {
+	Limit  int
+	Offset int
+}
+
+// ListGroups retrieves groups with filtering and pagination
+func (s *GroupService) ListGroups(ctx context.Context, filter GroupFilter, pagination Pagination) ([]models.Group, int, error) {
+	if pagination.Limit <= 0 {
+		pagination.Limit = 20
+	}
+	if pagination.Limit > 100 {
+		pagination.Limit = 100
+	}
+
+	query := `SELECT id, title, description, creator_id, cover_image_id,
+		created_at, updated_at, is_active
+		FROM groups
+		WHERE deleted_at IS NULL`
+	var args []interface{}
+
+	if filter.Title != "" {
+		query += " AND title LIKE ?"
+		args = append(args, "%"+filter.Title+"%")
+	}
+	if filter.CreatorID != nil {
+		query += " AND creator_id = ?"
+		args = append(args, filter.CreatorID.String())
+	}
+	if filter.IsActive != nil {
+		query += " AND is_active = ?"
+		args = append(args, *filter.IsActive)
+	}
+
+	// Get total count
+	countQuery := "SELECT COUNT(1) FROM groups WHERE deleted_at IS NULL"
+	var countArgs []interface{}
+	if filter.Title != "" {
+		countQuery += " AND title LIKE ?"
+		countArgs = append(countArgs, "%"+filter.Title+"%")
+	}
+	if filter.CreatorID != nil {
+		countQuery += " AND creator_id = ?"
+		countArgs = append(countArgs, filter.CreatorID.String())
+	}
+	if filter.IsActive != nil {
+		countQuery += " AND is_active = ?"
+		countArgs = append(countArgs, *filter.IsActive)
+	}
+
+	var total int
+	err := s.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+	args = append(args, pagination.Limit, pagination.Offset)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var groups []models.Group
+	for rows.Next() {
+		var group models.Group
+		var coverImageID sql.NullString
+		var isActive bool
+
+		err := rows.Scan(
+			&group.ID,
+			&group.Title,
+			&group.Description,
+			&group.CreatorID,
+			&coverImageID,
+			&group.CreatedAt,
+			&group.UpdatedAt,
+			&isActive,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		group.IsActive = isActive
+		if coverImageID.Valid {
+			uid, err := uuid.Parse(coverImageID.String)
+			if err == nil {
+				group.CoverImageID = &uid
+			}
+		}
+
+		groups = append(groups, group)
+	}
+
+	return groups, total, nil
 }

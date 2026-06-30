@@ -1,17 +1,19 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"backend/internal/models"
 	"backend/internal/websocket"
+
+	"github.com/google/uuid"
+	gorillaWS "github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
+var upgrader = gorillaWS.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
@@ -19,10 +21,10 @@ var upgrader = websocket.Upgrader{
 
 type WebSocketHandler struct {
 	hub *websocket.Hub
-	db  *sqlx.DB
+	db  *sql.DB
 }
 
-func NewWebSocketHandler(hub *websocket.Hub, db *sqlx.DB) *WebSocketHandler {
+func NewWebSocketHandler(hub *websocket.Hub, db *sql.DB) *WebSocketHandler {
 	return &WebSocketHandler{
 		hub: hub,
 		db:  db,
@@ -62,8 +64,9 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	}
 
 	var session models.Session
-	err = h.db.GetContext(r.Context(), &session,
-		"SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", req.Token)
+	err = h.db.QueryRowContext(r.Context(),
+		"SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?", req.Token).
+		Scan(&session.ID, &session.UserID, &session.ExpiresAt, &session.CreatedAt)
 	if err != nil {
 		conn.Close()
 		http.Error(w, "invalid session", http.StatusUnauthorized)
@@ -76,14 +79,9 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	client := &websocket.Client{
-		Hub:    h.hub,
-		Conn:   conn,
-		Send:   make(chan websocket.Message, 256),
-		UserID: userID,
-	}
+	client := websocket.NewClient(h.hub, conn, userID)
 
-	h.hub.Register(client)
+	h.hub.Register(client, userID)
 
 	go client.WritePump()
 	go client.ReadPump()

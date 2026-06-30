@@ -33,6 +33,17 @@ type Client struct {
 	rooms map[uuid.UUID]bool
 }
 
+// NewClient creates a new websocket client without starting pumps.
+func NewClient(hub *Hub, conn *websocket.Conn, userID uuid.UUID) *Client {
+	return &Client{
+		hub:    hub,
+		conn:   conn,
+		send:   make(chan []byte, 256),
+		userID: userID,
+		rooms:  make(map[uuid.UUID]bool),
+	}
+}
+
 // ServeWS upgrades the connection and starts websocket pumps.
 func ServeWS(
 	hub *Hub,
@@ -46,19 +57,14 @@ func ServeWS(
 		return
 	}
 
-	client := &Client{
-		hub:    hub,
-		conn:   conn,
-		send:   make(chan []byte, 256),
-		userID: userID,
-		rooms:  make(map[uuid.UUID]bool),
-	}
+	client := NewClient(hub, conn, userID)
 
-	go client.writePump()
-	go client.readPump()
+	go client.WritePump()
+	go client.ReadPump()
 }
 
-func (c *Client) readPump() {
+// ReadPump pumps messages from the websocket connection to the hub.
+func (c *Client) ReadPump() {
 	defer func() {
 		// remove client from all joined rooms
 		for roomID := range c.rooms {
@@ -146,7 +152,8 @@ func (c *Client) readPump() {
 	}
 }
 
-func (c *Client) writePump() {
+// WritePump pumps messages from the hub to the websocket connection.
+func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()

@@ -1,20 +1,22 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
+
+	"backend/internal/models"
+	"backend/internal/services"
 
 	"github.com/google/uuid"
 )
 
 // postHandler handles HTTP requests for post-related operations
 type postHandler struct {
-	postService PostService
+	postService services.PostService
 }
 
 // NewPostHandler creates a new post handler instance
-func NewPostHandler(postService PostService) *postHandler {
+func NewPostHandler(postService services.PostService) *postHandler {
 	return &postHandler{
 		postService: postService,
 	}
@@ -30,7 +32,7 @@ func (h *postHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse request body
-	var req CreatePostRequest
+	var req services.CreatePostRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
@@ -86,7 +88,7 @@ func (h *postHandler) GetPosts(w http.ResponseWriter, r *http.Request) {
 	groupIDStr := r.URL.Query().Get("group_id")
 
 	// Build filter
-	filter := PostFilter{
+	filter := services.PostFilter{
 		Limit:  20, // default
 		Offset: 0,  // default
 	}
@@ -145,7 +147,7 @@ func (h *postHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse request body
-	var req UpdatePostRequest
+	var req services.UpdatePostRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
@@ -222,7 +224,7 @@ func (h *postHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add reaction via service
-	err = h.postService.AddReaction(r.Context(), userID, postID, ReactionType(req.ReactionType))
+	err = h.postService.AddReaction(r.Context(), userID, postID, models.ReactionType(req.ReactionType))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -258,4 +260,3 @@ func (h *postHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
 	// Return no content
 	w.WriteHeader(http.StatusNoContent)
 }
-

@@ -13,6 +13,9 @@ type ctxKey string
 
 const userIDCtxKey ctxKey = "userID"
 
+// CtxUserID is the context key for storing the authenticated user ID
+const CtxUserID = "userID"
+
 func Auth(db *sql.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
