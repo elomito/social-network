@@ -1,19 +1,34 @@
 'use client'
 
-import React, { useEffect, useState, useContext } from 'react'
+import React, { useEffect, useState } from 'react'
 import NotificationItem from '../../../components/features/notifications/NotificationItem'
-import { getNotifications } from '../../../lib/apiClient'
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
       try {
-        const notifs = await getNotifications()
-        setNotifications(notifs)
+        setLoading(true)
+        const response = await fetch('http://localhost:8080/api/notifications', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to load notifications')
+        }
+
+        const data = await response.json()
+        setNotifications(data || [])
       } catch (e) {
         console.error(e)
+      } finally {
+        setLoading(false)
       }
     }
     load()
@@ -30,8 +45,17 @@ export default function NotificationsPage() {
         })
       }
       // refresh
-      const notifs = await getNotifications()
-      setNotifications(notifs)
+      const response = await fetch('http://localhost:8080/api/notifications', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setNotifications(data || [])
+      }
     } catch (e) {
       console.error(e)
     }
@@ -47,25 +71,50 @@ export default function NotificationsPage() {
           body: JSON.stringify({ accept: false }),
         })
       }
-      const notifs = await getNotifications()
-      setNotifications(notifs)
+      const response = await fetch('http://localhost:8080/api/notifications', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setNotifications(data || [])
+      }
     } catch (e) {
       console.error(e)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse space-y-4">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="h-16 rounded-lg bg-gray-200"></div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="p-6">
       <h2 className="mb-4 text-lg font-semibold">Notifications</h2>
       <div className="rounded-lg bg-white shadow">
-        {notifications.map((n) => (
-          <NotificationItem
-            key={n.id}
-            notification={n}
-            onAccept={handleAccept}
-            onDecline={handleDecline}
-          />
-        ))}
+        {notifications.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">No notifications yet.</div>
+        ) : (
+          notifications.map((n) => (
+            <NotificationItem
+              key={n.id}
+              notification={n}
+              onAccept={handleAccept}
+              onDecline={handleDecline}
+            />
+          ))
+        )}
       </div>
     </div>
   )

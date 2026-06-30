@@ -1,14 +1,15 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
 
-	"github.com/google/uuid"
-
 	"backend/internal/middleware"
 	"backend/internal/services"
+
+	"github.com/google/uuid"
 )
 
 // followRequestPayload is used to accept a target user id when not provided in the URL.
@@ -143,8 +144,8 @@ func ProfileHandler(svc *services.UserService, followSvc *services.FollowService
 		// Determine viewer identity (if any)
 		actorStr := middleware.GetUserID(r)
 		var (
-			actorID uuid.UUID
-			isOwner bool
+			actorID    uuid.UUID
+			isOwner    bool
 			isFollower bool
 		)
 		if actorStr != "" {
@@ -233,5 +234,115 @@ func ToggleVisibilityHandler(svc *services.UserService) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusOK, map[string]bool{"is_public": p.IsPublic})
+	}
+}
+
+// DiscoverUsersHandler searches profiles in the database
+func DiscoverUsersHandler(db *sql.DB, followSvc *services.FollowService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		actorStr := middleware.GetUserID(r)
+		if actorStr == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		actorID, err := uuid.Parse(actorStr)
+		if err != nil {
+			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		q := r.URL.Query()
+		query := q.Get("query")
+
+		rows, err := db.QueryContext(r.Context(), `
+			SELECT id, first_name, last_name, nickname, email
+			FROM users
+			WHERE (first_name LIKE ? OR last_name LIKE ? OR nickname LIKE ? OR email LIKE ?)
+			  AND id != ?
+			LIMIT 100
+		`, "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", actorStr)
+		if err != nil {
+			http.Error(w, "database query error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		type DiscoverUserResponse struct {
+			ID          string `json:"id"`
+			Username    string `json:"username"`
+			FullName    string `json:"fullName"`
+			IsFollowing bool   `json:"isFollowing"`
+		}
+
+		users := []DiscoverUserResponse{}
+		for rows.Next() {
+			var id, firstName, lastName, nickname, email string
+			if err := rows.Scan(&id, &firstName, &lastName, &nickname, &email); err != nil {
+				continue
+			}
+
+			userUUID, err := uuid.Parse(id)
+			if err != nil {
+				continue
+			}
+
+			username := nickname
+			if username == "" {
+				username = email
+			}
+
+			users = append(users, DiscoverUserResponse{
+				ID:          id,
+				Username:    username,
+				FullName:    firstName + " " + lastName,
+				IsFollowing: followSvc.IsFollowing(actorID, userUUID),
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(users)
+	}
+}
+
+// FollowStatusHandler checks if one user is following another
+func FollowStatusHandler(svc *services.FollowService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		actorStr := middleware.GetUserID(r)
+		if actorStr == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		actorID, err := uuid.Parse(actorStr)
+		if err != nil {
+			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		targetStr := r.URL.Query().Get("id")
+		var targetID uuid.UUID
+		if targetStr == "" {
+			var p followRequestPayload
+			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+				http.Error(w, "missing target id", http.StatusBadRequest)
+				return
+			}
+			if p.TargetID == uuid.Nil {
+				http.Error(w, "missing target id", http.StatusBadRequest)
+				return
+			}
+			targetID = p.TargetID
+		} else {
+			targetID, err = uuid.Parse(targetStr)
+			if err != nil {
+				http.Error(w, "invalid target id", http.StatusBadRequest)
+				return
+			}
+		}
+
+		isFollowing := svc.IsFollowing(actorID, targetID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"is_following": isFollowing})
 	}
 }

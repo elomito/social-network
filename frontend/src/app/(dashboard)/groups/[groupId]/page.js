@@ -1,15 +1,8 @@
+'use client'
+
 import React, { useEffect, useState } from 'react'
 import GroupHeader from '../../../../components/features/groups/GroupHeader.js'
-import {
-  getGroupMembers,
-  getGroupInvitations,
-  sendGroupInvite,
-  respondToInvite,
-  requestJoinGroup,
-  getGroupJoinRequests,
-  respondToJoinRequest,
-  getCurrentUser,
-} from '../../../../lib/apiClient.js'
+import EventCard from '../../../../components/features/groups/EventCard'
 
 async function fetchJSON(url) {
   const res = await fetch(url, { credentials: 'include' })
@@ -82,8 +75,9 @@ export default function GroupPage({ params }) {
       if (!groupId) return
       try {
         const ev = await getGroupEvents(groupId, 10, 0)
-        if (!mounted) return
-        setEvents(ev || [])
+        if (mounted) {
+          setEvents(ev || [])
+        }
       } catch (e) {
         console.error(e)
       }
@@ -153,6 +147,35 @@ export default function GroupPage({ params }) {
         const membersResp = await getGroupMembers(groupId)
         setMembers(membersResp)
       }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function handleCreateEvent({ title, description, start_time }) {
+    try {
+      await fetch(`/api/groups/${groupId}/events`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description, start_time }),
+      })
+      // reload events
+      const ev = await getGroupEvents(groupId, 10, 0)
+      setEvents(ev || [])
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function handleRSVP(eventId, status) {
+    try {
+      await fetch(`/api/events/${eventId}/responses`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response: status }),
+      })
     } catch (e) {
       console.error(e)
     }

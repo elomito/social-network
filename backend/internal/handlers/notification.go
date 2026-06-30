@@ -59,9 +59,8 @@ func CreateNotificationHandler(svc *services.NotificationService) http.HandlerFu
 // ListNotificationsHandler lists notifications for the authenticated user
 func ListNotificationsHandler(svc *services.NotificationService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uidVal := r.Context().Value(middleware.CtxUserID)
-		uidStr, ok := uidVal.(string)
-		if !ok || uidStr == "" {
+		uidStr := middleware.GetUserID(r)
+		if uidStr == "" {
 			http.Error(w, "unauthenticated", http.StatusUnauthorized)
 			return
 		}

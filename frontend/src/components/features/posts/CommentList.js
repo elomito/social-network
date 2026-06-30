@@ -33,7 +33,9 @@ export default function CommentList({ comments, loading, error }) {
   if (!comments || comments.length === 0) {
     return (
       <div className="rounded-lg border border-gray-100 bg-white py-8 text-center">
-        <p className="text-sm text-gray-500">No comments yet. Be the first to share your thoughts!</p>
+        <p className="text-sm text-gray-500">
+          No comments yet. Be the first to share your thoughts!
+        </p>
       </div>
     )
   }
@@ -55,13 +57,7 @@ export default function CommentList({ comments, loading, error }) {
 }
 
 function CommentItem({ comment }) {
-  const {
-    authorName = 'Anonymous',
-    authorAvatar,
-    createdAt,
-    content = '',
-    imageUrl,
-  } = comment
+  const { authorName = 'Anonymous', authorAvatar, createdAt, content = '', imageUrl } = comment
 
   const formattedDate = createdAt
     ? new Date(createdAt).toLocaleDateString(undefined, {
@@ -77,11 +73,7 @@ function CommentItem({ comment }) {
     <div className="rounded-lg border border-gray-100 bg-white p-4">
       <div className="flex items-start space-x-3">
         {authorAvatar ? (
-          <img
-            src={authorAvatar}
-            alt={authorName}
-            className="h-8 w-8 rounded-full object-cover"
-          />
+          <img src={authorAvatar} alt={authorName} className="h-8 w-8 rounded-full object-cover" />
         ) : (
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600">
             {authorName[0]?.toUpperCase() || '?'}

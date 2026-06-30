@@ -42,13 +42,16 @@ func main() {
 
 	// Initialize user & follow services
 	userService := services.NewUserService(sqliteConn)
-	followService := services.NewFollowService()
+	followService := services.NewFollowService(sqliteConn)
+	groupService := services.NewGroupService(sqliteConn)
+	notificationService := services.NewNotificationService(sqliteConn)
 
 	// Initialize services
 	eventService := services.NewEventService(eventRepo, eventResponseRepo)
 
 	// Initialize handlers
 	eventHandler := handlers.NewEventHandler(eventService)
+	groupHandler := handlers.NewGroupHandler(groupService, sqliteConn)
 
 	mux := http.NewServeMux()
 	hub := websocket.NewHub()
@@ -61,7 +64,13 @@ func main() {
 
 	// Public user profile + visibility toggle
 	mux.HandleFunc("/api/users", handlers.ProfileHandler(userService, followService))
+	mux.Handle("/api/users/discover", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.DiscoverUsersHandler(sqliteConn, followService))))
 	mux.Handle("/api/users/visibility", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.ToggleVisibilityHandler(userService))))
+
+	// Follow routes
+	mux.Handle("/api/follow", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.FollowHandler(followService))))
+	mux.Handle("/api/unfollow", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.UnfollowHandler(followService))))
+	mux.Handle("/api/follow/status", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.FollowStatusHandler(followService))))
 
 	// Event routes
 	mux.Handle("/api/events", middleware.Auth(sqliteConn)(http.HandlerFunc(eventHandler.CreateEvent)))
@@ -91,12 +100,134 @@ func main() {
 		}
 	})))
 
+	// Post routes
+	mux.Handle("/api/posts", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			// Get all posts (for feed)
+			handlers.GetPostsHandler(sqliteConn)(w, r)
+		case http.MethodPost:
+			handlers.CreatePostHandler(sqliteConn)(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/posts/", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetPostHandler(sqliteConn)(w, r)
+		case http.MethodPut:
+			handlers.UpdatePostHandler(sqliteConn)(w, r)
+		case http.MethodDelete:
+			handlers.DeletePostHandler(sqliteConn)(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/posts/{id}/reactions", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			handlers.AddReactionHandler(sqliteConn)(w, r)
+		case http.MethodDelete:
+			handlers.RemoveReactionHandler(sqliteConn)(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/posts/{id}/comments", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetCommentsHandler(sqliteConn)(w, r)
+		case http.MethodPost:
+			handlers.AddCommentHandler(sqliteConn)(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Group routes
+	mux.Handle("/api/groups", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			groupHandler.ListGroups(w, r)
+		case http.MethodPost:
+			groupHandler.CreateGroup(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/groups/{id}", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			groupHandler.GetGroupByID(w, r)
+		case http.MethodPut:
+			groupHandler.UpdateGroup(w, r)
+		case http.MethodDelete:
+			groupHandler.DeleteGroup(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/groups/{id}/join", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.JoinGroup)))
+	mux.Handle("/api/groups/{id}/leave", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.LeaveGroup)))
+	mux.Handle("/api/groups/{id}/members", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.ListGroupMembers)))
+	mux.Handle("/api/groups/{id}/invitations", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			groupHandler.GetGroupInvitations(w, r)
+		case http.MethodPost:
+			groupHandler.CreateGroupInvitation(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/groups/{id}/invitations/{invitationId}/respond", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.RespondToInvitation)))
+	mux.Handle("/api/groups/{id}/join-requests", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.GetGroupJoinRequests)))
+	mux.Handle("/api/groups/{id}/join-requests/{requestId}/respond", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.RespondToJoinRequest)))
+	mux.Handle("/api/groups/{id}/posts", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			groupHandler.GetGroupPosts(w, r)
+		case http.MethodPost:
+			groupHandler.CreateGroupPost(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Chat routes
+	mux.Handle("/api/conversations", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.GetConversationsHandler(sqliteConn, hub))))
+	mux.Handle("/api/conversations/peer", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.GetOrCreateConversationHandler(sqliteConn))))
+	mux.Handle("/api/conversations/{id}/messages", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetConversationMessagesHandler(sqliteConn)(w, r)
+		case http.MethodPost:
+			handlers.SendPrivateMessageHandler(sqliteConn, hub)(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Notifications
+	mux.Handle("/api/notifications", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.ListNotificationsHandler(notificationService)(w, r)
+		case http.MethodPost:
+			handlers.CreateNotificationHandler(notificationService)(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/notifications/read", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.MarkNotificationReadHandler(notificationService))))
+
 	mux.Handle("/", http.FileServer(http.Dir("../frontend/public")))
 
 	fmt.Printf("Starting server on http://localhost%s\n", serverAddr)
 	fmt.Printf("WebSocket endpoint: ws://localhost%s/ws\n", serverAddr)
 	if err := http.ListenAndServe(serverAddr, middleware.DefaultCORS(mux)); err != nil {
-		log.Fatal("Error: Failed to initialise server.")
+		log.Fatal("Error: Failed to initialise server.\nPort may be in use")
 	}
 }
 

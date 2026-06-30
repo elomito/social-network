@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import useWebSocket from '@/hooks/useWebSocket'
-import { apiClient } from '@/lib/apiClient'
+import apiClient from '@/lib/apiClient'
 
 const NotificationContext = createContext(null)
 

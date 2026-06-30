@@ -18,11 +18,13 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
   const [canMessage, setCanMessage] = useState(true)
+  const [loading, setLoading] = useState(true)
   const listRef = useRef(null)
 
   useEffect(() => {
     async function load() {
       try {
+        setLoading(true)
         const conv = await getConversations()
         setConversations(conv)
         if (conv.length) {
@@ -30,6 +32,8 @@ export default function MessagesPage() {
         }
       } catch (e) {
         console.error(e)
+      } finally {
+        setLoading(false)
       }
     }
     load()
@@ -114,6 +118,20 @@ export default function MessagesPage() {
     } catch (e) {
       console.error(e)
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex gap-6 p-6">
+        <div className="w-80">
+          <div className="animate-pulse space-y-2 rounded-lg bg-white p-4 shadow">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="h-12 rounded bg-gray-200"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -1,7 +1,11 @@
-import React from 'react'
+// src/components/features/posts/PostCard.js
+'use client'
 
-export default function PostCard({ post }) {
-  // Gracefully handle missing data fields just in case
+import React, { useState } from 'react'
+import Link from 'next/link'
+import { getTokenFromCookie } from '@/lib/utils'
+
+export default function PostCard({ post, onReactionChange }) {
   const {
     authorName = 'Anonymous User',
     authorAvatar,
@@ -11,7 +15,14 @@ export default function PostCard({ post }) {
     privacy = 'public',
     likesCount = 0,
     commentsCount = 0,
+    id: postId,
+    userReaction,
   } = post
+
+  const [optimisticLikes, setOptimisticLikes] = useState(likesCount)
+  const [optimisticReaction, setOptimisticReaction] = useState(userReaction || null)
+  const [reactionLoading, setReactionLoading] = useState(false)
+
   // Format timestamp to look clean (e.g., "Jun 24, 2026")
   const formattedDate = createdAt
     ? new Date(createdAt).toLocaleDateString(undefined, {
@@ -20,6 +31,58 @@ export default function PostCard({ post }) {
         year: 'numeric',
       })
     : 'Just now'
+
+  const handleReaction = async (reactionType) => {
+    if (reactionLoading) return
+
+    setReactionLoading(true)
+    const previousReaction = optimisticReaction
+    const previousLikes = optimisticLikes
+
+    // Optimistic update
+    if (optimisticReaction === reactionType) {
+      // Removing reaction
+      setOptimisticReaction(null)
+      setOptimisticLikes(optimisticLikes - 1)
+    } else if (optimisticReaction) {
+      // Changing reaction
+      setOptimisticReaction(reactionType)
+      setOptimisticLikes(optimisticLikes + (reactionType === 'like' ? 1 : -1))
+    } else {
+      // Adding new reaction
+      setOptimisticReaction(reactionType)
+      setOptimisticLikes(optimisticLikes + 1)
+    }
+
+    try {
+      const token = getTokenFromCookie()
+      const method = optimisticReaction === reactionType ? 'DELETE' : 'POST'
+
+      const response = await fetch(`http://localhost:8080/api/posts/${postId}/reactions`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ reaction_type: reactionType })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update reaction')
+      }
+
+      if (onReactionChange) {
+        onReactionChange(postId, optimisticReaction === reactionType ? null : reactionType)
+      }
+    } catch (err) {
+      // Revert optimistic update on error
+      setOptimisticReaction(previousReaction)
+      setOptimisticLikes(previousLikes)
+    } finally {
+      setReactionLoading(false)
+    }
+  }
 
   return (
     <div className="space-y-3 rounded-lg border border-gray-100 bg-white p-4 shadow">
@@ -59,15 +122,22 @@ export default function PostCard({ post }) {
       )}
       {/* FOOTER SECTION: Interaction Entry Points */}
       <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-sm text-gray-500">
-        <button className="flex items-center space-x-2 transition hover:text-blue-600">
+        <button
+          onClick={() => handleReaction('like')}
+          disabled={reactionLoading}
+          className="flex items-center space-x-2 transition ${optimisticReaction === 'like' ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'}"
+        >
           <span>👍</span>
-          <span className="text-xs font-medium">{likesCount} Likes</span>
+          <span className="text-xs font-medium">{optimisticLikes} Likes</span>
         </button>
 
-        <button className="flex items-center space-x-2 transition hover:text-blue-600">
+        <Link
+          href={`/post/${postId}`}
+          className="flex items-center space-x-2 transition hover:text-blue-600"
+        >
           <span>💬</span>
           <span className="text-xs font-medium">{commentsCount} Comments</span>
-        </button>
+        </Link>
       </div>
     </div>
   )

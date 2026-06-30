@@ -1,15 +1,14 @@
 'use client'
 
 import React, { useState } from 'react'
-import api from '@/lib/apiClient'
-import { useAuth } from '../../hooks/useAuth'
+import { useRouter } from 'next/navigation'
 
 export default function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { setToken } = useAuth()
+  const router = useRouter()
 
   const validateForm = () => {
     if (!email.includes('@')) {
@@ -30,9 +29,22 @@ export default function LoginForm() {
     setLoading(true)
 
     try {
-      const response = await api.post('/api/auth/login', { email, password })
-      setToken(response.data.token)
-      window.location.href = '/feed'
+      const response = await fetch('http://localhost:8080/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.message || 'Login failed')
+      }
+
+      // Login successful - session cookie is set by backend
+      router.push('/feed')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -82,6 +94,13 @@ export default function LoginForm() {
           {loading ? 'Logging in...' : 'Sign In'}
         </button>
       </form>
+
+      <p className="mt-4 text-center text-sm text-gray-600">
+        Don't have an account?{' '}
+        <a href="/auth/register" className="font-medium text-blue-600 hover:text-blue-700">
+          Sign up
+        </a>
+      </p>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 export function getTokenFromCookie() {
   if (typeof document === 'undefined') return null
-  const match = document.cookie.match(/(^|;)\s*token=([^;]+)/)
+  // Backend uses session_id cookie, not token
+  const match = document.cookie.match(/(^|;)\s*session_id=([^;]+)/)
   return match ? match[2] : null
 }
 

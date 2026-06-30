@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react'
 import PostCard from '@/components/features/posts/PostCard'
 import CommentList from '@/components/features/posts/CommentList'
-import { getTokenFromCookie } from '@/lib/utils'
 
 export default function PostDetailPage({ params }) {
   const { postId } = params
@@ -31,15 +30,13 @@ export default function PostDetailPage({ params }) {
         setError('')
         setCommentsError('')
 
-        const token = getTokenFromCookie()
-
         // Fetch post
         const postResponse = await fetch(`http://localhost:8080/api/posts/${postId}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
           },
+          credentials: 'include',
         })
 
         if (!postResponse.ok) {
@@ -60,8 +57,8 @@ export default function PostDetailPage({ params }) {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
           },
+          credentials: 'include',
         })
 
         if (!commentsResponse.ok) {
@@ -80,24 +77,6 @@ export default function PostDetailPage({ params }) {
 
     fetchPostAndComments()
   }, [postId])
-
-  // Handle image file selection
-  const handleImageChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setImageFile(file)
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        setImagePreview(event.target.result)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  // Handle GIF URL input
-  const handleGifChange = (e) => {
-    setGifUrl(e.target.value)
-  }
 
   // Handle comment submission with optimistic updates
   const handleCommentSubmit = async (e) => {
@@ -128,8 +107,6 @@ export default function PostDetailPage({ params }) {
     setGifUrl('')
 
     try {
-      const token = getTokenFromCookie()
-
       // Build request body - handle image upload if present
       let imageId = null
       if (imageFile) {
@@ -137,9 +114,7 @@ export default function PostDetailPage({ params }) {
         // The backend expects an image_id, not a URL
         const uploadResponse = await fetch('http://localhost:8080/api/images/upload', {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: 'include',
           body: (() => {
             const formData = new FormData()
             formData.append('image', imageFile)
@@ -157,8 +132,8 @@ export default function PostDetailPage({ params }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           content: commentText,
           image_id: imageId,
@@ -244,9 +219,7 @@ export default function PostDetailPage({ params }) {
 
       {/* Comments section */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-800">
-          Comments ({allComments.length})
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-800">Comments ({allComments.length})</h3>
 
         {commentsError && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
@@ -262,9 +235,11 @@ export default function PostDetailPage({ params }) {
         newComment={newComment}
         setNewComment={setNewComment}
         imagePreview={imagePreview}
-        handleImageChange={handleImageChange}
+        imageFile={imageFile}
+        setImagePreview={setImagePreview}
+        setImageFile={setImageFile}
         gifUrl={gifUrl}
-        handleGifChange={handleGifChange}
+        setGifUrl={setGifUrl}
         onSubmit={handleCommentSubmit}
         submitting={submitting}
       />
@@ -277,9 +252,11 @@ function CommentComposer({
   newComment,
   setNewComment,
   imagePreview,
-  handleImageChange,
+  imageFile,
+  setImagePreview,
+  setImageFile,
   gifUrl,
-  handleGifChange,
+  setGifUrl,
   onSubmit,
   submitting,
 }) {
@@ -297,19 +274,15 @@ function CommentComposer({
 
         {/* Image preview */}
         {imagePreview && (
-          <div className="mt-2 relative">
-            <img
-              src={imagePreview}
-              alt="Preview"
-              className="max-h-48 rounded-lg object-cover"
-            />
+          <div className="relative mt-2">
+            <img src={imagePreview} alt="Preview" className="max-h-48 rounded-lg object-cover" />
             <button
               type="button"
               onClick={() => {
                 setImagePreview('')
                 setImageFile(null)
               }}
-              className="absolute top-1 right-1 rounded-full bg-gray-800 bg-opacity-50 px-1.5 py-0.5 text-xs text-white"
+              className="absolute right-1 top-1 rounded-full bg-gray-800 bg-opacity-50 px-1.5 py-0.5 text-xs text-white"
             >
               ×
             </button>
@@ -318,16 +291,12 @@ function CommentComposer({
 
         {/* GIF preview */}
         {gifUrl && (
-          <div className="mt-2 relative">
-            <img
-              src={gifUrl}
-              alt="GIF Preview"
-              className="max-h-48 rounded-lg object-cover"
-            />
+          <div className="relative mt-2">
+            <img src={gifUrl} alt="GIF Preview" className="max-h-48 rounded-lg object-cover" />
             <button
               type="button"
               onClick={() => setGifUrl('')}
-              className="absolute top-1 right-1 rounded-full bg-gray-800 bg-opacity-50 px-1.5 py-0.5 text-xs text-white"
+              className="absolute right-1 top-1 rounded-full bg-gray-800 bg-opacity-50 px-1.5 py-0.5 text-xs text-white"
             >
               ×
             </button>
@@ -341,7 +310,17 @@ function CommentComposer({
               <input
                 type="file"
                 accept="image/*"
-                onChange={handleImageChange}
+                onChange={(e) => {
+                  const file = e.target.files[0]
+                  if (file) {
+                    setImageFile(file)
+                    const reader = new FileReader()
+                    reader.onload = (event) => {
+                      setImagePreview(event.target.result)
+                    }
+                    reader.readAsDataURL(file)
+                  }
+                }}
                 className="hidden"
                 disabled={submitting}
               />
@@ -352,7 +331,7 @@ function CommentComposer({
               <input
                 type="url"
                 value={gifUrl}
-                onChange={handleGifChange}
+                onChange={(e) => setGifUrl(e.target.value)}
                 placeholder="https://giphy.com/..."
                 className="ml-1 w-48 rounded border border-gray-300 px-1.5 py-0.5 text-xs"
               />

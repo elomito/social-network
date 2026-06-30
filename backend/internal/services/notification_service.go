@@ -52,28 +52,41 @@ func (s *NotificationService) ListForUser(ctx context.Context, recipientID uuid.
 	ret := make([]models.Notification, 0)
 	for rows.Next() {
 		var (
-			idStr, recipientStr, initiatorStr, ntype, referenceID, message, createdAtStr string
-			isReadInt                                                                  int
+			idStr, recipientStr, ntype, createdAtStr string
+			initiatorStr, referenceIDStr, messageStr sql.NullString
+			isReadInt                                int
 		)
-		if err := rows.Scan(&idStr, &recipientStr, &initiatorStr, &ntype, &referenceID, &message, &isReadInt, &createdAtStr); err != nil {
+		if err := rows.Scan(&idStr, &recipientStr, &initiatorStr, &ntype, &referenceIDStr, &messageStr, &isReadInt, &createdAtStr); err != nil {
 			return nil, err
 		}
 		id, _ := uuid.Parse(idStr)
 		recipient, _ := uuid.Parse(recipientStr)
 		var initiator *uuid.UUID
-		if initiatorStr != "" {
-			if uid, err := uuid.Parse(initiatorStr); err == nil {
+		if initiatorStr.Valid && initiatorStr.String != "" {
+			if uid, err := uuid.Parse(initiatorStr.String); err == nil {
 				initiator = &uid
 			}
 		}
 		createdAt, _ := time.Parse(time.RFC3339, createdAtStr)
+		if createdAt.IsZero() {
+			createdAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr)
+		}
+
+		var refID, msg string
+		if referenceIDStr.Valid {
+			refID = referenceIDStr.String
+		}
+		if messageStr.Valid {
+			msg = messageStr.String
+		}
+
 		ret = append(ret, models.Notification{
 			ID:          id,
 			RecipientID: recipient,
 			InitiatorID: initiator,
 			Type:        ntype,
-			ReferenceID: referenceID,
-			Message:     message,
+			ReferenceID: refID,
+			Message:     msg,
 			IsRead:      isReadInt != 0,
 			CreatedAt:   createdAt,
 		})

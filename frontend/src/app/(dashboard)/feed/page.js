@@ -1,7 +1,10 @@
+// src/app/(dashboard)/feed/page.js
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import PostCard from '@/components/features/posts/PostCard'
+import PostComposer from '@/components/features/posts/PostComposer'
+import RightSidebar from '@/components/layout/RightSidebar'
 
 export default function FeedPage() {
   const [posts, setPosts] = useState([])
@@ -38,29 +41,20 @@ export default function FeedPage() {
 
       setError('')
 
-      // Pull the auth token out of local cookie storage
-      const token = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('token='))
-        ?.split('=')[1]
-
-      const response = await fetch(
-        `http://localhost:8080/api/posts/feed?page=${pageNumber}&limit=10`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
+      const response = await fetch(`http://localhost:8080/api/posts?page=${pageNumber}&limit=10`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      })
 
       if (!response.ok) {
         throw new Error('Failed to retrieve your social feed.')
       }
 
       const data = await response.json()
-      const fetchedPosts = data.posts || []
+      const fetchedPosts = data || []
 
       setPosts((prevPosts) => {
         return isInitialFetch ? fetchedPosts : [...prevPosts, ...fetchedPosts]
@@ -81,15 +75,20 @@ export default function FeedPage() {
     fetchFeedPosts(page, page === 1)
   }, [page])
 
+  const handlePostCreated = (newPost) => {
+    setPosts((prev) => [newPost, ...prev])
+  }
+
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-      {/* COMPOSER AT THE TOP (#68) */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
-        <p className="text-sm text-gray-400">What's on your mind? (Composer UI Placeholder)</p>
-      </div>
+      {/* COMPOSER AT THE TOP */}
+      <PostComposer onPostCreated={handlePostCreated} />
+
+      {/* RIGHT SIDEBAR WITH TRENDS/SUGGESTIONS */}
+      <RightSidebar />
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-100 p-3 text-sm text-red-600">
+        <div className="error-state">
           {error}
         </div>
       )}
@@ -99,23 +98,28 @@ export default function FeedPage() {
         {loading ? (
           /* LOADING SKELETON STATE */
           [1, 2, 3].map((n) => (
-            <div key={n} className="animate-pulse space-y-4 rounded-lg bg-white p-6 shadow">
-              <div className="flex items-center space-x-3">
-                <div className="h-10 w-10 rounded-full bg-gray-200"></div>
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-1/4 rounded bg-gray-200"></div>
-                  <div className="h-3 w-1/6 rounded bg-gray-200"></div>
+            <div key={n} className="post-card animate-pulse">
+              <div className="post-header">
+                <div className="post-author">
+                  <div className="post-avatar skeleton rounded-full"></div>
+                  <div className="post-author-info">
+                    <div className="skeleton h-4 w-32 rounded"></div>
+                    <div className="skeleton h-3 w-24 rounded"></div>
+                  </div>
                 </div>
               </div>
-              <div className="h-4 w-full rounded bg-gray-200"></div>
-              <div className="h-4 w-5/6 rounded bg-gray-200"></div>
+              <div className="post-content">
+                <div className="skeleton h-4 w-full rounded mb-2"></div>
+                <div className="skeleton h-4 w-5/6 rounded"></div>
+              </div>
             </div>
           ))
         ) : posts.length === 0 ? (
           /* EMPTY STATE */
-          <div className="rounded-lg border border-gray-100 bg-white py-12 text-center shadow">
-            <p className="text-lg font-medium text-gray-500">Your feed is quiet right now.</p>
-            <p className="mt-1 text-sm text-gray-400">Follow people to see posts here!</p>
+          <div className="post-card empty-state">
+            <div className="empty-state-icon">📭</div>
+            <h3 className="empty-state-title">Your feed is quiet right now</h3>
+            <p className="empty-state-description">Follow people to see posts here!</p>
           </div>
         ) : (
           /* LIVE POSTS STREAM */
@@ -134,7 +138,7 @@ export default function FeedPage() {
 
         {/* LOADING MORE FOOTER SKELETON */}
         {loadingMore && (
-          <div className="animate-pulse p-4 text-center text-sm text-gray-500">
+          <div className="animate-pulse p-4 text-center text-sm text-blue-500">
             Loading older updates...
           </div>
         )}

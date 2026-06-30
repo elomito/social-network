@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useCallback } from 'react'
-import { useWebSocketContext } from '@/context/WebSocketContext'
+import { useWebSocketContext } from '@/context/webSocketContext'
 
 /**
  * Shared WebSocket Hook

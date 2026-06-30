@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 
 	// migration tool downloaded
@@ -55,6 +57,7 @@ var legacySchemaColumns = []schemaColumn{
 	{table: "posts", name: "privacy_setting", definition: "privacy_setting TEXT NOT NULL DEFAULT 'public' CHECK (privacy_setting IN ('public','almost_private','private'))"},
 	{table: "posts", name: "created_at", definition: "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
 	{table: "posts", name: "updated_at", definition: "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
+	{table: "posts", name: "group_id", definition: "group_id TEXT"},
 
 	{table: "comments", name: "post_id", definition: "post_id TEXT NOT NULL"},
 	{table: "comments", name: "author_id", definition: "author_id TEXT NOT NULL"},
@@ -194,6 +197,34 @@ func ensureLegacySchemaColumns(db *sql.DB) error {
 	return ensureLegacyColumns(db, legacySchemaColumns)
 }
 
+// getMigrationPath returns the absolute path to the migrations directory
+func getMigrationPath() string {
+	// Get the current working directory
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Printf("Warning: could not get working directory, using relative path: %v", err)
+		return "file://pkg/db/migrations/sqlite"
+	}
+
+	// Try to find the migrations directory relative to the working directory
+	// The server runs from backend/cmd/server, so we need to go up 3 levels
+	migrationPath := filepath.Join(wd, "pkg", "db", "migrations", "sqlite")
+
+	// Check if the path exists
+	if _, err := os.Stat(migrationPath); err == nil {
+		return "file://" + migrationPath
+	}
+
+	// Try alternative path (running from project root)
+	migrationPath = filepath.Join(wd, "backend", "pkg", "db", "migrations", "sqlite")
+	if _, err := os.Stat(migrationPath); err == nil {
+		return "file://" + migrationPath
+	}
+
+	// Fallback to relative path
+	return "file://pkg/db/migrations/sqlite"
+}
+
 // runs in terminal to know it has been connection has been enabled succsesfuly
 func RunMigrations(db *sql.DB) error {
 	log.Println("🔄 [MIGRATION] Starting automatic schema checks...")
@@ -212,7 +243,7 @@ func RunMigrations(db *sql.DB) error {
 	}
 
 	// 2. string a file where a db can be applied changes and done awy with changes
-	migrationFolder := "file://pkg/db/migrations/sqlite"
+	migrationFolder := getMigrationPath()
 
 	// 3. started our migrator engine
 	migrator, err := migrate.NewWithDatabaseInstance(migrationFolder, "sqlite3", driver)

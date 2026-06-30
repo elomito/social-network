@@ -1,120 +1,98 @@
 package services
 
 import (
-    "fmt"
-    "sync"
+	"database/sql"
+	"log"
 
-    "github.com/google/uuid"
-
-    "backend/internal/models"
+	"github.com/google/uuid"
 )
 
-// FollowService manages follow relationships in-memory.
+// FollowService manages follow relationships in SQLite database.
 type FollowService struct {
-    mu        sync.RWMutex
-    follows   map[string]models.Follow            // key: follower:following
-    followers map[string]map[string]struct{}     // key: followingID -> set of followerID
-    following map[string]map[string]struct{}     // key: followerID -> set of followingID
+	db *sql.DB
 }
 
-// NewFollowService creates an in-memory FollowService.
-func NewFollowService() *FollowService {
-    return &FollowService{
-        follows:   make(map[string]models.Follow),
-        followers: make(map[string]map[string]struct{}),
-        following: make(map[string]map[string]struct{}),
-    }
-}
-
-func keyOf(follower, following uuid.UUID) string {
-    return fmt.Sprintf("%s:%s", follower.String(), following.String())
+// NewFollowService creates a FollowService.
+func NewFollowService(db *sql.DB) *FollowService {
+	return &FollowService{
+		db: db,
+	}
 }
 
 // Follow creates a follow relationship. Idempotent.
 func (s *FollowService) Follow(follower, following uuid.UUID) error {
-    if follower == following {
-        return nil
-    }
-    k := keyOf(follower, following)
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    if _, ok := s.follows[k]; ok {
-        return nil
-    }
-    f, _ := models.NewFollow(follower, following)
-    s.follows[k] = f
-    // update follower set
-    if _, ok := s.followers[following.String()]; !ok {
-        s.followers[following.String()] = make(map[string]struct{})
-    }
-    s.followers[following.String()][follower.String()] = struct{}{}
-    // update following set
-    if _, ok := s.following[follower.String()]; !ok {
-        s.following[follower.String()] = make(map[string]struct{})
-    }
-    s.following[follower.String()][following.String()] = struct{}{}
-    return nil
+	if follower == following {
+		return nil
+	}
+	_, err := s.db.Exec(`
+		INSERT OR IGNORE INTO follows (follower_id, following_id, created_at)
+		VALUES (?, ?, datetime('now'))
+	`, follower.String(), following.String())
+	return err
 }
 
 // Unfollow removes a follow relationship. Idempotent.
 func (s *FollowService) Unfollow(follower, following uuid.UUID) error {
-    k := keyOf(follower, following)
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    if _, ok := s.follows[k]; !ok {
-        return nil
-    }
-    delete(s.follows, k)
-    delete(s.followers[following.String()], follower.String())
-    if len(s.followers[following.String()]) == 0 {
-        delete(s.followers, following.String())
-    }
-    delete(s.following[follower.String()], following.String())
-    if len(s.following[follower.String()]) == 0 {
-        delete(s.following, follower.String())
-    }
-    return nil
+	_, err := s.db.Exec(`
+		DELETE FROM follows WHERE follower_id = ? AND following_id = ?
+	`, follower.String(), following.String())
+	return err
 }
 
 // IsFollowing returns true when follower follows following.
 func (s *FollowService) IsFollowing(follower, following uuid.UUID) bool {
-    k := keyOf(follower, following)
-    s.mu.RLock()
-    defer s.mu.RUnlock()
-    _, ok := s.follows[k]
-    return ok
+	var count int
+	err := s.db.QueryRow(`
+		SELECT COUNT(1) FROM follows WHERE follower_id = ? AND following_id = ?
+	`, follower.String(), following.String()).Scan(&count)
+	if err != nil {
+		return false
+	}
+	return count > 0
 }
 
 // GetFollowers returns follower IDs for a given user.
 func (s *FollowService) GetFollowers(user uuid.UUID) []uuid.UUID {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
-    set, ok := s.followers[user.String()]
-    if !ok {
-        return nil
-    }
-    out := make([]uuid.UUID, 0, len(set))
-    for id := range set {
-        if u, err := uuid.Parse(id); err == nil {
-            out = append(out, u)
-        }
-    }
-    return out
+	rows, err := s.db.Query(`
+		SELECT follower_id FROM follows WHERE following_id = ?
+	`, user.String())
+	if err != nil {
+		log.Printf("GetFollowers query error: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var followers []uuid.UUID
+	for rows.Next() {
+		var idStr string
+		if err := rows.Scan(&idStr); err == nil {
+			if id, err := uuid.Parse(idStr); err == nil {
+				followers = append(followers, id)
+			}
+		}
+	}
+	return followers
 }
 
 // GetFollowing returns IDs that the user is following.
 func (s *FollowService) GetFollowing(user uuid.UUID) []uuid.UUID {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
-    set, ok := s.following[user.String()]
-    if !ok {
-        return nil
-    }
-    out := make([]uuid.UUID, 0, len(set))
-    for id := range set {
-        if u, err := uuid.Parse(id); err == nil {
-            out = append(out, u)
-        }
-    }
-    return out
+	rows, err := s.db.Query(`
+		SELECT following_id FROM follows WHERE follower_id = ?
+	`, user.String())
+	if err != nil {
+		log.Printf("GetFollowing query error: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var following []uuid.UUID
+	for rows.Next() {
+		var idStr string
+		if err := rows.Scan(&idStr); err == nil {
+			if id, err := uuid.Parse(idStr); err == nil {
+				following = append(following, id)
+			}
+		}
+	}
+	return following
 }

@@ -49,7 +49,7 @@ export function WebSocketProvider({ children }) {
       wsRef.current.close()
     }
 
-    setConnectionStatus((prev) => (prev === 'DISCONNECTED' ? 'CONNECTING' : 'RERECONNECTING'))
+    setConnectionStatus((prev) => (prev === 'DISCONNECTED' ? 'CONNECTING' : 'RECONNECTING'))
 
     // Append token as a query parameter for authentication verification
     const socketUrl = `${WS_URL}?token=${encodeURIComponent(token)}`
@@ -139,7 +139,12 @@ export function WebSocketProvider({ children }) {
 export function useWebSocketContext() {
   const context = useContext(WebSocketContext)
   if (!context) {
-    throw new Error('useWebSocketContext must be consumed inside a WebSocketProvider')
+    // Return default values instead of throwing to support static generation
+    return {
+      connectionStatus: 'DISCONNECTED',
+      send: () => false,
+      listeners: new Set(),
+    }
   }
   return context
 }

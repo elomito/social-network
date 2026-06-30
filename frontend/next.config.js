@@ -14,6 +14,12 @@ const nextConfig = {
       bodySizeLimit: '2mb',
     },
   },
+  // Configure path aliases for Turbopack
+  turbopack: {
+    resolveAlias: {
+      '@/*': './src/*',
+    },
+  },
 };
 
 module.exports = nextConfig;
