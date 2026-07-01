@@ -146,6 +146,18 @@ func main() {
 		}
 	})))
 
+	// Comment reaction routes
+	mux.Handle("/api/comments/{id}/reactions", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			handlers.AddCommentReactionHandler(sqliteConn)(w, r)
+		case http.MethodDelete:
+			handlers.RemoveCommentReactionHandler(sqliteConn)(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
 	// Image routes
 	mux.Handle("/api/images", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.UploadImageHandler(sqliteConn))))
 
