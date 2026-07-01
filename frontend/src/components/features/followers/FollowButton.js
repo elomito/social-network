@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { followUser, unfollowUser } from '@/lib/apiClient'
 
 export default function FollowButton({ targetUser, currentUserId, onStateChange }) {
   const [loading, setLoading] = useState(false)
@@ -20,21 +21,16 @@ export default function FollowButton({ targetUser, currentUserId, onStateChange 
     const previousState = { ...targetUser }
 
     let updatedState = { ...targetUser }
-    let endpoint = ''
 
     if (targetUser.isFollowing) {
-      endpoint = `/api/unfollow?id=${targetUser.id}`
       updatedState.isFollowing = false
       if (updatedState.followersCount !== undefined) updatedState.followersCount -= 1
     } else if (targetUser.isRequested) {
-      endpoint = `/api/follow-requests/cancel/${targetUser.id}`
       updatedState.isRequested = false
     } else {
       if (targetUser.isPrivate) {
-        endpoint = `/api/follow?id=${targetUser.id}`
         updatedState.isRequested = true
       } else {
-        endpoint = `/api/follow?id=${targetUser.id}`
         updatedState.isFollowing = true
         if (updatedState.followersCount !== undefined) updatedState.followersCount += 1
       }
@@ -43,15 +39,11 @@ export default function FollowButton({ targetUser, currentUserId, onStateChange 
     onStateChange(updatedState)
 
     try {
-      const response = await fetch(`${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      })
-
-      if (!response.ok) throw new Error('API request failed')
+      if (targetUser.isFollowing) {
+        await unfollowUser(targetUser.id)
+      } else {
+        await followUser(targetUser.id)
+      }
     } catch (err) {
       console.error('Rolling back relationship state adjustment:', err.message)
       onStateChange(previousState)

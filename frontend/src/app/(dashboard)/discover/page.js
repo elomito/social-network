@@ -2,51 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import Avatar from '@/components/ui/Avatar'
-
-const sampleUsers = [
-  {
-    id: '1',
-    username: 'alice',
-    fullName: 'Alice Johnson',
-    isFollowing: false,
-    bio: 'Full-stack developer & open source enthusiast',
-  },
-  {
-    id: '2',
-    username: 'bob',
-    fullName: 'Bob Smith',
-    isFollowing: false,
-    bio: 'UX Designer passionate about accessibility',
-  },
-  {
-    id: '3',
-    username: 'charlie',
-    fullName: 'Charlie Brown',
-    isFollowing: true,
-    bio: 'Data scientist & machine learning engineer',
-  },
-  {
-    id: '4',
-    username: 'diana',
-    fullName: 'Diana Prince',
-    isFollowing: false,
-    bio: 'Product manager building the future',
-  },
-  {
-    id: '5',
-    username: 'evan',
-    fullName: 'Evan Wright',
-    isFollowing: false,
-    bio: 'DevOps engineer & cloud architect',
-  },
-  {
-    id: '6',
-    username: 'fiona',
-    fullName: 'Fiona Green',
-    isFollowing: true,
-    bio: 'Mobile developer | React Native',
-  },
-]
+import { getDiscoverUsers, followUser, unfollowUser } from '@/lib/apiClient'
 
 export default function DiscoverPage() {
   const [users, setUsers] = useState([])
@@ -88,15 +44,7 @@ export default function DiscoverPage() {
     const fetchUsers = async () => {
       try {
         setLoading(true)
-        const response = await fetch(
-          `/api/users/discover?query=${encodeURIComponent(debouncedQuery)}`,
-          {
-            credentials: 'include',
-          }
-        )
-        if (!response.ok) throw new Error('Failed to fetch network profiles.')
-        const data = await response.json()
-        const dataList = data || []
+        const dataList = await getDiscoverUsers(debouncedQuery)
         setUsers((prevUsers) => {
           return page === 1 ? dataList : [...prevUsers, ...dataList]
         })
@@ -115,16 +63,11 @@ export default function DiscoverPage() {
     try {
       setActionLoading((prev) => ({ ...prev, [userId]: true }))
 
-      const endpoint = currentStatus ? `/api/unfollow?id=${userId}` : `/api/follow?id=${userId}`
-      const response = await fetch(`${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      })
-
-      if (!response.ok) throw new Error('Action execution failed.')
+      if (currentStatus) {
+        await unfollowUser(userId)
+      } else {
+        await followUser(userId)
+      }
 
       setUsers((prevUsers) =>
         prevUsers.map((user) =>
@@ -138,7 +81,7 @@ export default function DiscoverPage() {
     }
   }
 
-  const displayUsers = users.length > 0 ? users : sampleUsers
+  const displayUsers = users
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
@@ -197,6 +140,9 @@ export default function DiscoverPage() {
                   />
                   <h3 className="text-base font-semibold text-gray-900">{user.fullName}</h3>
                   <p className="text-sm text-gray-500">@{user.username}</p>
+                  {user.followersCount !== undefined && (
+                    <p className="mt-1 text-xs text-gray-400">{user.followersCount} followers</p>
+                  )}
                   {user.bio && (
                     <p className="mt-2 line-clamp-2 text-xs text-gray-400">{user.bio}</p>
                   )}
