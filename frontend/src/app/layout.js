@@ -3,7 +3,7 @@
 import React from 'react'
 import { AuthProvider } from '../context/AuthContext'
 import { NotificationProvider } from '../context/NotificationContext'
-import { WebSocketProvider } from '../context/webSocketContext'
+import { WebSocketProvider } from '../context/WebSocketContext'
 import './globals.css'
 
 export default function RootLayout({ children }) {

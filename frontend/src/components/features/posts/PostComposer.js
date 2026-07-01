@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react'
 import Avatar from '@/components/ui/Avatar'
+import { createPost, uploadImage } from '@/lib/apiClient'
 
 export default function PostComposer({ onPostCreated }) {
   const [content, setContent] = useState('')
@@ -20,7 +21,7 @@ export default function PostComposer({ onPostCreated }) {
       setImageFile(file)
       const reader = new FileReader()
       reader.onload = (event) => {
-        setImagePreview(event.target.value)
+        setImagePreview(event.target.result)
       }
       reader.readAsDataURL(file)
     }
@@ -45,40 +46,15 @@ export default function PostComposer({ onPostCreated }) {
       let imageId = null
 
       if (imageFile) {
-        const uploadResponse = await fetch('/api/images/upload', {
-          method: 'POST',
-          credentials: 'include',
-          body: (() => {
-            const formData = new FormData()
-            formData.append('image', imageFile)
-            return formData
-          })(),
-        })
-
-        if (uploadResponse.ok) {
-          const uploadData = await uploadResponse.json()
-          imageId = uploadData.id
-        }
+        const uploadData = await uploadImage(imageFile)
+        imageId = uploadData.id
       }
 
-      const response = await fetch('/api/posts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          content: content.trim(),
-          privacy_level: privacy,
-          image_id: imageId,
-        }),
+      const data = await createPost({
+        content: content.trim(),
+        privacy_level: privacy,
+        image_id: imageId,
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to create post')
-      }
-
-      const data = await response.json()
 
       setContent('')
       setPrivacy('public')
@@ -89,7 +65,8 @@ export default function PostComposer({ onPostCreated }) {
         onPostCreated(data)
       }
     } catch (err) {
-      setError(err.message)
+      const payload = err?.response?.data
+      setError(payload?.message || err.message || 'Failed to create post')
     } finally {
       setSubmitting(false)
     }
@@ -149,7 +126,7 @@ export default function PostComposer({ onPostCreated }) {
                 <div className="flex items-center gap-2">
                   <label className="cursor-pointer rounded-xl p-2 text-gray-500 transition hover:bg-blue-50 hover:text-blue-600">
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0120.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
                     </svg>
                     <input
                       ref={fileInputRef}

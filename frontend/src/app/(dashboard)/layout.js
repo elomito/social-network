@@ -1,4 +1,7 @@
+'use client'
+
 import React from 'react'
+import { useAuth } from '@/hooks/useAuth'
 import ProtectedRoute from '@/context/ProtectedRoute'
 import Navbar from '@/components/layout/Navbar'
 import Sidebar from '@/components/layout/Sidebar'

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const AUTH_COOKIE_NAME = 'token'
+const AUTH_COOKIE_NAME = 'session_id'
 
 const PROTECTED_PREFIXES = [
   '/feed',
