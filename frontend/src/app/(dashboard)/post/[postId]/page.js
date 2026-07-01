@@ -1,319 +1,274 @@
 'use client'
 
-import React, { useState, useEffect, use } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useParams } from 'next/navigation'
 import PostCard from '@/components/features/posts/PostCard'
 import CommentList from '@/components/features/posts/CommentList'
 import { getPost, getComments, createComment, uploadImage } from '@/lib/apiClient'
+import { getTokenFromCookie } from '@/lib/utils'
+import Avatar from '@/components/ui/Avatar'
 
-export default function PostDetailPage({ params }) {
-  const { postId } = use(params)
+export default function PostDetailPage() {
+  const { postId } = useParams()
   const [post, setPost] = useState(null)
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
-  const [loadingComments, setLoadingComments] = useState(true)
   const [error, setError] = useState('')
-  const [commentsError, setCommentsError] = useState('')
-  const [newComment, setNewComment] = useState('')
-  const [imageFile, setImageFile] = useState(null)
-  const [imagePreview, setImagePreview] = useState('')
-  const [gifUrl, setGifUrl] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [optimisticComments, setOptimisticComments] = useState([])
+  const [commentText, setCommentText] = useState('')
+  const [commentImage, setCommentImage] = useState(null)
+  const [commentImagePreview, setCommentImagePreview] = useState('')
+  const [commentSubmitting, setCommentSubmitting] = useState(false)
+  const [commentError, setCommentError] = useState('')
 
   useEffect(() => {
     if (!postId) return
 
-    const fetchPostAndComments = async () => {
+    let cancelled = false
+
+    async function fetchPostAndComments() {
       try {
         setLoading(true)
-        setLoadingComments(true)
         setError('')
-        setCommentsError('')
 
-        const postData = await getPost(postId)
+        const [postData, commentsData] = await Promise.all([getPost(postId), getComments(postId)])
+
+        if (cancelled) return
+
         setPost(postData)
-
-        const commentsData = await getComments(postId)
         setComments(commentsData || [])
       } catch (err) {
-        const status = err?.response?.status
-        if (status === 403) {
-          setError('You do not have permission to view this post')
-        } else if (status === 404) {
-          setError('Post not found')
-        } else {
-          setError(err?.response?.data?.message || 'Failed to load post')
+        if (!cancelled) {
+          setError(err?.response?.data?.message || 'Failed to load post.')
         }
       } finally {
-        setLoading(false)
-        setLoadingComments(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
 
     fetchPostAndComments()
+    return () => {
+      cancelled = true
+    }
   }, [postId])
 
   const handleCommentSubmit = async (e) => {
     e.preventDefault()
-    if (!newComment.trim() && !imageFile && !gifUrl) return
+    if (!commentText.trim() && !commentImage) return
 
-    setSubmitting(true)
-
-    const optimisticComment = {
-      id: `temp-${Date.now()}`,
-      authorName: 'You',
-      content: newComment,
-      imageUrl: imagePreview || gifUrl,
-      createdAt: new Date().toISOString(),
-      isOptimistic: true,
-    }
-
-    setOptimisticComments((prev) => [...prev, optimisticComment])
-    setComments((prev) => [...prev, optimisticComment])
-
-    const commentText = newComment
-    setNewComment('')
-    setImageFile(null)
-    setImagePreview('')
-    setGifUrl('')
+    setCommentSubmitting(true)
+    setCommentError('')
 
     try {
       let imageUrl = null
-      if (imageFile) {
-        try {
-          const uploadData = await uploadImage(imageFile)
-          imageUrl = uploadData.image_url
-        } catch (err) {
-          console.error('Failed to upload image:', err)
-        }
+      if (commentImage) {
+        const uploadData = await uploadImage(commentImage)
+        imageUrl = uploadData.image_url
       }
 
       const data = await createComment(postId, {
-        content: commentText,
+        content: commentText.trim(),
         image_url: imageUrl,
       })
 
-      setOptimisticComments((prev) => prev.filter((c) => c.id !== optimisticComment.id))
-      setComments((prev) =>
-        prev
-          .map((c) => (c.id === optimisticComment.id ? data : c))
-          .filter((c) => c.id !== optimisticComment.id || c.isOptimistic)
-      )
-
-      if (post) {
-        setPost((prev) => ({
-          ...prev,
-          commentsCount: (prev.commentsCount || 0) + 1,
-        }))
-      }
+      setComments((prev) => [...prev, data])
+      setPost((prev) => (prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : prev))
+      setCommentText('')
+      setCommentImage(null)
+      setCommentImagePreview('')
     } catch (err) {
-      setOptimisticComments((prev) => prev.filter((c) => c.id !== optimisticComment.id))
-      setComments((prev) => prev.filter((c) => c.id !== optimisticComment.id))
-      setCommentsError(err.message)
+      setCommentError(err?.response?.data?.message || 'Failed to post comment')
     } finally {
-      setSubmitting(false)
+      setCommentSubmitting(false)
     }
   }
 
-  const handleInlineCommentAdded = (postId, comment) => {
-    setComments((prev) => [...prev, comment])
-    if (post) {
-      setPost((prev) => ({
-        ...prev,
-        commentsCount: (prev.commentsCount || 0) + 1,
-      }))
+  const handleCommentImageChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setCommentImage(file)
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        setCommentImagePreview(event.target.result)
+      }
+      reader.readAsDataURL(file)
     }
   }
 
-  const handleReplyAdded = (postId, reply) => {
-    setComments((prev) => [...prev, reply])
-    if (post) {
-      setPost((prev) => ({
-        ...prev,
-        commentsCount: (prev.commentsCount || 0) + 1,
-      }))
-    }
+  const clearCommentImage = () => {
+    setCommentImage(null)
+    setCommentImagePreview('')
   }
 
-  const allComments = [...comments, ...optimisticComments]
+  const handleCommentAdded = (newComment) => {
+    setComments((prev) => [...prev, newComment])
+    setPost((prev) => (prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : prev))
+  }
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-        <div className="animate-pulse space-y-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-full bg-gray-200" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 w-1/4 rounded bg-gray-200" />
-              <div className="h-3 w-1/6 rounded bg-gray-200" />
+      <div className="mx-auto max-w-3xl px-4 py-6">
+        <div className="animate-pulse space-y-4">
+          <div className="rounded-lg bg-white p-6 shadow">
+            <div className="flex items-center space-x-3">
+              <div className="h-10 w-10 rounded-full bg-gray-200" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-1/4 rounded bg-gray-200" />
+                <div className="h-3 w-1/6 rounded bg-gray-200" />
+              </div>
             </div>
+            <div className="mt-4 h-4 w-full rounded bg-gray-200" />
+            <div className="mt-2 h-4 w-5/6 rounded bg-gray-200" />
           </div>
-          <div className="h-4 w-full rounded bg-gray-200" />
-          <div className="h-4 w-5/6 rounded bg-gray-200" />
         </div>
       </div>
     )
   }
 
-  if (error) {
+  if (error || !post) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-6">
+      <div className="mx-auto max-w-3xl px-4 py-6">
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
-          {error}
-        </div>
-      </div>
-    )
-  }
-
-  if (!post) {
-    return (
-      <div className="mx-auto max-w-2xl px-4 py-6">
-        <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
-            <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m0 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900">Post not found</h3>
-          <p className="mt-1 text-sm text-gray-500">This post may have been removed or is private.</p>
+          {error || 'Post not found'}
         </div>
       </div>
     )
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-      <PostCard post={post} onCommentAdded={handleInlineCommentAdded} />
+    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
+      <PostCard
+        post={post}
+        commentPreview={comments.slice(0, 3)}
+        onCommentAdded={(postId, newComment) => {
+          setComments((prev) => [...prev, newComment])
+          setPost((prev) =>
+            prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : prev
+          )
+        }}
+      />
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-gray-900">
-            Comments ({allComments.length})
-          </h3>
-        </div>
+      {/* Comment Form */}
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+        <div className="p-4">
+          <h3 className="mb-3 text-sm font-semibold text-gray-900">Leave a comment</h3>
+          <form onSubmit={handleCommentSubmit}>
+            <div className="flex gap-3">
+              <Avatar src={null} alt="You" fallback="U" size="md" />
+              <div className="flex-1">
+                <textarea
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="What are your thoughts?"
+                  rows={3}
+                  className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  disabled={commentSubmitting}
+                />
 
-        {commentsError && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-            {commentsError}
-          </div>
-        )}
+                {/* Image preview */}
+                {commentImagePreview && (
+                  <div className="relative mt-3">
+                    <img
+                      src={commentImagePreview}
+                      alt="Preview"
+                      className="max-h-48 rounded-xl object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={clearCommentImage}
+                      className="absolute right-2 top-2 rounded-full bg-gray-900/60 p-1.5 text-white transition hover:bg-gray-900/80"
+                    >
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                )}
 
-        <CommentList
-          comments={allComments}
-          loading={loadingComments}
-          error=""
-          onReplyAdded={handleReplyAdded}
-        />
-      </div>
+                {commentError && (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                    {commentError}
+                  </div>
+                )}
 
-      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <form onSubmit={handleCommentSubmit}>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <textarea
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Write a comment..."
-                rows={3}
-                className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                disabled={submitting}
-              />
-
-              {/* Image preview */}
-              {imagePreview && (
-                <div className="relative mt-3">
-                  <img src={imagePreview} alt="Preview" className="max-h-48 rounded-xl object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImagePreview('')
-                      setImageFile(null)
-                    }}
-                    className="absolute right-2 top-2 rounded-full bg-gray-900/60 p-1.5 text-white transition hover:bg-gray-900/80"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-
-              {gifUrl && (
-                <div className="relative mt-3">
-                  <img src={gifUrl} alt="GIF Preview" className="max-h-48 rounded-xl object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setGifUrl('')}
-                    className="absolute right-2 top-2 rounded-full bg-gray-900/60 p-1.5 text-white transition hover:bg-gray-900/80"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-
-              <div className="mt-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <div className="mt-3 flex items-center justify-between">
                   <label className="cursor-pointer rounded-lg p-2 text-gray-500 transition hover:bg-blue-50 hover:text-blue-600">
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                    <svg
+                      className="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.5}
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
+                      />
                     </svg>
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files[0]
-                        if (file) {
-                          setImageFile(file)
-                          const reader = new FileReader()
-                          reader.onload = (event) => {
-                            setImagePreview(event.target.result)
-                          }
-                          reader.readAsDataURL(file)
-                        }
-                      }}
+                      onChange={handleCommentImageChange}
                       className="hidden"
-                      disabled={submitting}
+                      disabled={commentSubmitting}
                     />
                   </label>
-                  <span className="text-xs text-gray-300">|</span>
-                  <label className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-                    </svg>
-                    GIF
-                    <input
-                      type="url"
-                      value={gifUrl}
-                      onChange={(e) => setGifUrl(e.target.value)}
-                      placeholder="https://giphy.com/..."
-                      className="w-32 rounded-lg border border-gray-200 bg-gray-50/50 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  </label>
-                </div>
 
-                <button
-                  type="submit"
-                  disabled={submitting || (!newComment.trim() && !imagePreview && !gifUrl)}
-                  className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/30 transition-all duration-200 hover:shadow-md hover:shadow-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95"
-                >
-                  {submitting ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Posting...
-                    </span>
-                  ) : (
-                    'Comment'
-                  )}
-                </button>
+                  <button
+                    type="submit"
+                    disabled={commentSubmitting || (!commentText.trim() && !commentImage)}
+                    className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/30 transition-all duration-200 hover:shadow-md hover:shadow-blue-500/40 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {commentSubmitting ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          />
+                        </svg>
+                        Posting...
+                      </span>
+                    ) : (
+                      'Comment'
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </form>
+          </form>
+        </div>
+      </div>
+
+      {/* Comments List */}
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+        <div className="p-4">
+          <h3 className="mb-4 text-sm font-semibold text-gray-900">
+            {comments.length} {comments.length === 1 ? 'Comment' : 'Comments'}
+          </h3>
+          <CommentList comments={comments} postId={postId} onCommentAdded={handleCommentAdded} />
+        </div>
       </div>
     </div>
   )
