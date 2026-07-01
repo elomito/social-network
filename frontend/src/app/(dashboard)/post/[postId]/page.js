@@ -84,7 +84,6 @@ export default function PostDetailPage({ params }) {
           const uploadData = await uploadImage(imageFile)
           imageUrl = uploadData.image_url
         } catch (err) {
-          // Image upload failed, continue without image
           console.error('Failed to upload image:', err)
         }
       }
@@ -113,6 +112,26 @@ export default function PostDetailPage({ params }) {
       setCommentsError(err.message)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleInlineCommentAdded = (postId, comment) => {
+    setComments((prev) => [...prev, comment])
+    if (post) {
+      setPost((prev) => ({
+        ...prev,
+        commentsCount: (prev.commentsCount || 0) + 1,
+      }))
+    }
+  }
+
+  const handleReplyAdded = (postId, reply) => {
+    setComments((prev) => [...prev, reply])
+    if (post) {
+      setPost((prev) => ({
+        ...prev,
+        commentsCount: (prev.commentsCount || 0) + 1,
+      }))
     }
   }
 
@@ -164,7 +183,7 @@ export default function PostDetailPage({ params }) {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-      <PostCard post={post} />
+      <PostCard post={post} onCommentAdded={handleInlineCommentAdded} />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -179,131 +198,123 @@ export default function PostDetailPage({ params }) {
           </div>
         )}
 
-        <CommentList comments={allComments} loading={loadingComments} error="" />
+        <CommentList
+          comments={allComments}
+          loading={loadingComments}
+          error=""
+          onReplyAdded={handleReplyAdded}
+        />
       </div>
 
-      <CommentComposer
-        newComment={newComment}
-        setNewComment={setNewComment}
-        imagePreview={imagePreview}
-        imageFile={imageFile}
-        setImagePreview={setImagePreview}
-        setImageFile={setImageFile}
-        gifUrl={gifUrl}
-        setGifUrl={setGifUrl}
-        onSubmit={handleCommentSubmit}
-        submitting={submitting}
-      />
-    </div>
-  )
-}
-
-function CommentComposer({
-  newComment,
-  setNewComment,
-  imagePreview,
-  imageFile,
-  setImagePreview,
-  setImageFile,
-  gifUrl,
-  setGifUrl,
-  onSubmit,
-  submitting,
-}) {
-  return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-      <form onSubmit={onSubmit}>
-        <textarea
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Write a comment..."
-          rows={3}
-          className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          disabled={submitting}
-        />
-
-        {imagePreview && (
-          <div className="relative mt-3">
-            <img src={imagePreview} alt="Preview" className="max-h-48 rounded-xl object-cover" />
-            <button
-              type="button"
-              onClick={() => {
-                setImagePreview('')
-                setImageFile(null)
-              }}
-              className="absolute right-2 top-2 rounded-full bg-gray-900/60 p-1.5 text-white transition hover:bg-gray-900/80"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {gifUrl && (
-          <div className="relative mt-3">
-            <img src={gifUrl} alt="GIF Preview" className="max-h-48 rounded-xl object-cover" />
-            <button
-              type="button"
-              onClick={() => setGifUrl('')}
-              className="absolute right-2 top-2 rounded-full bg-gray-900/60 p-1.5 text-white transition hover:bg-gray-900/80"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        <div className="mt-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <label className="cursor-pointer rounded-lg p-2 text-gray-500 transition hover:bg-blue-50 hover:text-blue-600">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-              </svg>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files[0]
-                  if (file) {
-                    setImageFile(file)
-                    const reader = new FileReader()
-                    reader.onload = (event) => {
-                      setImagePreview(event.target.result)
-                    }
-                    reader.readAsDataURL(file)
-                  }
-                }}
-                className="hidden"
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <form onSubmit={handleCommentSubmit}>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Write a comment..."
+                rows={3}
+                className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 disabled={submitting}
               />
-            </label>
-            <span className="text-xs text-gray-300">|</span>
-            <label className="flex items-center gap-1.5 text-xs text-gray-500">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-              </svg>
-              GIF
-              <input
-                type="url"
-                value={gifUrl}
-                onChange={(e) => setGifUrl(e.target.value)}
-                placeholder="https://giphy.com/..."
-                className="w-32 rounded-lg border border-gray-200 bg-gray-50/50 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </label>
-          </div>
 
-          <button
-            type="submit"
-            disabled={submitting || (!newComment.trim() && !imagePreview && !gifUrl)}
-            className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/30 transition-all duration-200 hover:shadow-md hover:shadow-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95"
-          >
-            {submitting ? 'Posting...' : 'Comment'}
-          </button>
-        </div>
-      </form>
+              {/* Image preview */}
+              {imagePreview && (
+                <div className="relative mt-3">
+                  <img src={imagePreview} alt="Preview" className="max-h-48 rounded-xl object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImagePreview('')
+                      setImageFile(null)
+                    }}
+                    className="absolute right-2 top-2 rounded-full bg-gray-900/60 p-1.5 text-white transition hover:bg-gray-900/80"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              {gifUrl && (
+                <div className="relative mt-3">
+                  <img src={gifUrl} alt="GIF Preview" className="max-h-48 rounded-xl object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setGifUrl('')}
+                    className="absolute right-2 top-2 rounded-full bg-gray-900/60 p-1.5 text-white transition hover:bg-gray-900/80"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <label className="cursor-pointer rounded-lg p-2 text-gray-500 transition hover:bg-blue-50 hover:text-blue-600">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                    </svg>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0]
+                        if (file) {
+                          setImageFile(file)
+                          const reader = new FileReader()
+                          reader.onload = (event) => {
+                            setImagePreview(event.target.result)
+                          }
+                          reader.readAsDataURL(file)
+                        }
+                      }}
+                      className="hidden"
+                      disabled={submitting}
+                    />
+                  </label>
+                  <span className="text-xs text-gray-300">|</span>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                    </svg>
+                    GIF
+                    <input
+                      type="url"
+                      value={gifUrl}
+                      onChange={(e) => setGifUrl(e.target.value)}
+                      placeholder="https://giphy.com/..."
+                      className="w-32 rounded-lg border border-gray-200 bg-gray-50/50 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting || (!newComment.trim() && !imagePreview && !gifUrl)}
+                  className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/30 transition-all duration-200 hover:shadow-md hover:shadow-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95"
+                >
+                  {submitting ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Posting...
+                    </span>
+                  ) : (
+                    'Comment'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

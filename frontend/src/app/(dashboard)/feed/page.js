@@ -104,15 +104,40 @@ export default function FeedPage() {
             </div>
           ) : (
             posts.map((post, index) => {
-              if (posts.length === index + 1) {
+                if (posts.length === index + 1) {
+                  return (
+                    <div ref={lastPostElementRef} key={post.id}>
+                      <PostCard
+                        post={post}
+                        onCommentAdded={(postId) => {
+                          setPosts((prev) =>
+                            prev.map((p) =>
+                              p.id === postId
+                                ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
+                                : p
+                            )
+                          )
+                        }}
+                      />
+                    </div>
+                  )
+                }
                 return (
-                  <div ref={lastPostElementRef} key={post.id}>
-                    <PostCard post={post} />
-                  </div>
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    onCommentAdded={(postId) => {
+                      setPosts((prev) =>
+                        prev.map((p) =>
+                          p.id === postId
+                            ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
+                            : p
+                        )
+                      )
+                    }}
+                  />
                 )
-              }
-              return <PostCard key={post.id} post={post} />
-            })
+              })
           )}
 
           {loadingMore && (
