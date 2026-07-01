@@ -185,6 +185,16 @@ export async function reactToComment(commentId, reaction) {
   return data
 }
 
+export async function addCommentReaction(commentId, reactionType) {
+  const { data } = await apiClient.post(`/comments/${commentId}/reactions`, { reaction_type: reactionType })
+  return data
+}
+
+export async function removeCommentReaction(commentId) {
+  const { data } = await apiClient.delete(`/comments/${commentId}/reactions`)
+  return data
+}
+
 // ---------------------------------------------------------------------------
 // Groups
 //
