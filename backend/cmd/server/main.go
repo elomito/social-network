@@ -146,6 +146,9 @@ func main() {
 		}
 	})))
 
+	// Image routes
+	mux.Handle("/api/images", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.UploadImageHandler(sqliteConn))))
+
 	// Group routes
 	mux.Handle("/api/groups", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

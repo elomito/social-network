@@ -56,6 +56,7 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			Content        string  `json:"content"`
 			PrivacySetting string  `json:"privacy_level"`
 			GroupID        *string `json:"group_id"`
+			ImageURL       string  `json:"image_url"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -77,10 +78,15 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			groupIDVal = sql.NullString{String: *req.GroupID, Valid: true}
 		}
 
+		var imagePath sql.NullString
+		if req.ImageURL != "" {
+			imagePath = sql.NullString{String: req.ImageURL, Valid: true}
+		}
+
 		_, err = db.ExecContext(r.Context(), `
-			INSERT INTO posts (id, author_id, content, privacy_setting, group_id, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, postID, userID.String(), req.Content, privacy, groupIDVal, now, now)
+			INSERT INTO posts (id, author_id, content, image_path, privacy_setting, group_id, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		`, postID, userID.String(), req.Content, imagePath, privacy, groupIDVal, now, now)
 		if err != nil {
 			http.Error(w, "failed to create post: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -102,6 +108,7 @@ func CreatePostHandler(db *sql.DB) http.HandlerFunc {
 			AuthorName:    authorName,
 			CreatedAt:     now.Format(time.RFC3339),
 			Content:       req.Content,
+			ImageUrl:      req.ImageURL,
 			Privacy:       req.PrivacySetting,
 			LikesCount:    0,
 			CommentsCount: 0,
@@ -551,7 +558,8 @@ func AddCommentHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		var req struct {
-			Content string `json:"content"`
+			Content  string `json:"content"`
+			ImageURL string `json:"image_url"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -561,10 +569,15 @@ func AddCommentHandler(db *sql.DB) http.HandlerFunc {
 		commentID := uuid.New().String()
 		now := time.Now().UTC()
 
+		var imagePath sql.NullString
+		if req.ImageURL != "" {
+			imagePath = sql.NullString{String: req.ImageURL, Valid: true}
+		}
+
 		_, err := db.ExecContext(r.Context(), `
-			INSERT INTO comments (id, post_id, author_id, content, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, commentID, postID, userIDStr, req.Content, now, now)
+			INSERT INTO comments (id, post_id, author_id, content, image_path, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, commentID, postID, userIDStr, req.Content, imagePath, now, now)
 		if err != nil {
 			http.Error(w, "failed to insert comment", http.StatusInternalServerError)
 			return
@@ -587,6 +600,7 @@ func AddCommentHandler(db *sql.DB) http.HandlerFunc {
 			AuthorName: authorName,
 			CreatedAt:  now.Format(time.RFC3339),
 			Content:    req.Content,
+			ImageUrl:   req.ImageURL,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

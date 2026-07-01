@@ -3,12 +3,24 @@
 import React, { useEffect, useState, use } from 'react'
 import GroupHeader from '../../../../components/features/groups/GroupHeader.js'
 import EventCard from '../../../../components/features/groups/EventCard'
-
-async function fetchJSON(url) {
-  const res = await fetch(url, { credentials: 'include' })
-  if (!res.ok) throw new Error('Failed to fetch')
-  return res.json()
-}
+import {
+  getGroup,
+  getCurrentUser,
+  TODO_BACKEND_getGroupMembers,
+  TODO_BACKEND_getGroupInvitations,
+  TODO_BACKEND_getGroupJoinRequests,
+  getGroupEvents,
+  leaveGroup,
+  requestToJoinGroup,
+  inviteToGroup,
+  TODO_BACKEND_respondToGroupInvitation,
+  TODO_BACKEND_respondToJoinRequest,
+  createEvent,
+  respondToEvent,
+  TODO_BACKEND_getGroupPosts,
+  TODO_BACKEND_createGroupPost,
+  createComment,
+} from '@/lib/apiClient'
 
 export default function GroupPage({ params }) {
   const { groupId } = use(params)
@@ -28,34 +40,54 @@ export default function GroupPage({ params }) {
     let mounted = true
     async function load() {
       try {
-        const g = await fetchJSON(`/api/groups/${groupId}`)
+        const g = await getGroup(groupId)
         if (!mounted) return
         setGroup(g)
 
-        const membersResp = await getGroupMembers(groupId)
-        if (!mounted) return
-        setMembers(membersResp)
-
         const me = await getCurrentUser()
-        setIsCreator(me && g && me.id === g.creator_id)
+        const isCreator = me && g && me.id === g.creator_id
+        setIsCreator(isCreator)
 
-        setIsMember(membersResp.some((m) => m.id === (me && me.id)))
+        // Creator is always a member by default
+        let membersResp = []
+        try {
+          membersResp = await TODO_BACKEND_getGroupMembers(groupId)
+          if (!mounted) return
+          setMembers(membersResp)
+        } catch (err) {
+          console.error('Failed to load members:', err)
+        }
+
+        const isCurrentUserMember = membersResp.some((m) => m.id === (me && me.id))
+        setIsMember(isCurrentUserMember || isCreator)
 
         // load invitations (for members) and join requests (for creator)
-        if (membersResp.some((m) => m.id === (me && me.id))) {
-          const inv = await getGroupInvitations(groupId)
-          if (!mounted) return
-          setInvitations(inv)
+        if (isCurrentUserMember || isCreator) {
+          try {
+            const inv = await TODO_BACKEND_getGroupInvitations(groupId)
+            if (!mounted) return
+            setInvitations(inv)
+          } catch (err) {
+            console.error('Failed to load invitations:', err)
+          }
         }
-        if (me && g && me.id === g.creator_id) {
-          const reqs = await getGroupJoinRequests(groupId)
-          if (!mounted) return
-          setJoinRequests(reqs)
+        if (isCreator) {
+          try {
+            const reqs = await TODO_BACKEND_getGroupJoinRequests(groupId)
+            if (!mounted) return
+            setJoinRequests(reqs)
+          } catch (err) {
+            console.error('Failed to load join requests:', err)
+          }
         }
 
-        if (membersResp.some((m) => m.id === (me && me.id))) {
-          const postsResp = await fetchJSON(`/api/groups/${groupId}/posts`)
-          setPosts(postsResp)
+        if (isCurrentUserMember || isCreator) {
+          try {
+            const postsResp = await TODO_BACKEND_getGroupPosts(groupId)
+            setPosts(postsResp)
+          } catch (err) {
+            console.error('Failed to load group posts:', err)
+          }
         }
       } catch (err) {
         console.error(err)
@@ -92,12 +124,12 @@ export default function GroupPage({ params }) {
     try {
       if (!isMember) {
         // request to join when group requires approval
-        await requestJoinGroup(groupId)
+        await requestToJoinGroup(groupId)
       } else {
-        await fetch(`/api/groups/${groupId}/leave`, { method: 'POST', credentials: 'include' })
+        await leaveGroup(groupId)
       }
       // reload members
-      const membersResp = await getGroupMembers(groupId)
+      const membersResp = await TODO_BACKEND_getGroupMembers(groupId)
       setMembers(membersResp)
       const me = await getCurrentUser()
       setIsMember(membersResp.some((m) => m.id === (me && me.id)))
@@ -112,8 +144,8 @@ export default function GroupPage({ params }) {
 
   async function sendInvite() {
     try {
-      await sendGroupInvite(groupId, inviteeId)
-      const inv = await getGroupInvitations(groupId)
+      await inviteToGroup(groupId, inviteeId)
+      const inv = await TODO_BACKEND_getGroupInvitations(groupId)
       setInvitations(inv)
       setInviteModalOpen(false)
       setInviteeId('')
@@ -125,12 +157,12 @@ export default function GroupPage({ params }) {
 
   async function handleRespondInvite(invitationId, accept) {
     try {
-      await respondToInvite(groupId, invitationId, accept)
-      const inv = await getGroupInvitations(groupId)
+      await TODO_BACKEND_respondToGroupInvitation(groupId, invitationId, accept)
+      const inv = await TODO_BACKEND_getGroupInvitations(groupId)
       setInvitations(inv)
       // refresh members if accepted
       if (accept) {
-        const membersResp = await getGroupMembers(groupId)
+        const membersResp = await TODO_BACKEND_getGroupMembers(groupId)
         setMembers(membersResp)
       }
     } catch (e) {
@@ -140,11 +172,11 @@ export default function GroupPage({ params }) {
 
   async function handleRespondJoinRequest(requestId, approve) {
     try {
-      await respondToJoinRequest(groupId, requestId, approve)
-      const reqs = await getGroupJoinRequests(groupId)
+      await TODO_BACKEND_respondToJoinRequest(groupId, requestId, approve)
+      const reqs = await TODO_BACKEND_getGroupJoinRequests(groupId)
       setJoinRequests(reqs)
       if (approve) {
-        const membersResp = await getGroupMembers(groupId)
+        const membersResp = await TODO_BACKEND_getGroupMembers(groupId)
         setMembers(membersResp)
       }
     } catch (e) {
@@ -154,11 +186,11 @@ export default function GroupPage({ params }) {
 
   async function handleCreateEvent({ title, description, start_time }) {
     try {
-      await fetch(`/api/groups/${groupId}/events`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, start_time }),
+      await createEvent({
+        group_id: groupId,
+        title,
+        description,
+        date_time: start_time,
       })
       // reload events
       const ev = await getGroupEvents(groupId, 10, 0)
@@ -170,12 +202,7 @@ export default function GroupPage({ params }) {
 
   async function handleRSVP(eventId, status) {
     try {
-      await fetch(`/api/events/${eventId}/responses`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response: status }),
-      })
+      await respondToEvent(eventId, status)
     } catch (e) {
       console.error(e)
     }
@@ -236,13 +263,8 @@ export default function GroupPage({ params }) {
                     const content = e.target.elements.content.value
                     if (!content) return
                     try {
-                      await fetch(`/api/groups/${groupId}/posts`, {
-                        method: 'POST',
-                        credentials: 'include',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ content }),
-                      })
-                      const postsResp = await fetchJSON(`/api/groups/${groupId}/posts`)
+                      await TODO_BACKEND_createGroupPost(groupId, content)
+                      const postsResp = await TODO_BACKEND_getGroupPosts(groupId)
                       setPosts(postsResp)
                       e.target.reset()
                     } catch (err) {
@@ -310,13 +332,8 @@ export default function GroupPage({ params }) {
                             const content = e.target.elements.content.value
                             if (!content) return
                             try {
-                              await fetch(`/api/posts/${p.id}/comments`, {
-                                method: 'POST',
-                                credentials: 'include',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ content }),
-                              })
-                              const postsResp = await fetchJSON(`/api/groups/${groupId}/posts`)
+                              await createComment(p.id, { content })
+                              const postsResp = await TODO_BACKEND_getGroupPosts(groupId)
                               setPosts(postsResp)
                               e.target.reset()
                             } catch (err) {
