@@ -160,8 +160,8 @@ export async function addPostRecipient(postId, userId) {
 // Comments
 // ---------------------------------------------------------------------------
 
-export async function getComments(postId) {
-  const { data } = await apiClient.get(`/posts/${postId}/comments`)
+export async function getComments(postId, params = {}) {
+  const { data } = await apiClient.get(`/posts/${postId}/comments`, { params })
   return data
 }
 

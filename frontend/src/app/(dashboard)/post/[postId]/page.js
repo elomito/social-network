@@ -8,6 +8,8 @@ import { getPost, getComments, createComment, uploadImage } from '@/lib/apiClien
 import { getTokenFromCookie } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
 
+const COMMENTS_PER_PAGE = 20
+
 export default function PostDetailPage() {
   const { postId } = useParams()
   const [post, setPost] = useState(null)
@@ -30,7 +32,10 @@ export default function PostDetailPage() {
         setLoading(true)
         setError('')
 
-        const [postData, commentsData] = await Promise.all([getPost(postId), getComments(postId)])
+        const [postData, commentsData] = await Promise.all([
+          getPost(postId),
+          getComments(postId, { limit: COMMENTS_PER_PAGE, offset: 0 })
+        ])
 
         if (cancelled) return
 

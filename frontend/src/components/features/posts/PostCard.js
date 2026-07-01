@@ -1,11 +1,14 @@
 // src/components/features/posts/PostCard.js
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { getTokenFromCookie } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
-import { createComment, uploadImage } from '@/lib/apiClient'
+import { createComment, uploadImage, getComments } from '@/lib/apiClient'
+import CommentList from '@/components/features/posts/CommentList'
+
+const COMMENTS_PER_PAGE = 10
 
 export default function PostCard({ post, onReactionChange, onCommentAdded, commentPreview }) {
   const {
@@ -30,6 +33,12 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
   const [commentImagePreview, setCommentImagePreview] = useState('')
   const [commentSubmitting, setCommentSubmitting] = useState(false)
   const [commentError, setCommentError] = useState('')
+  const [showAllComments, setShowAllComments] = useState(false)
+  const [allComments, setAllComments] = useState([])
+  const [loadingMoreComments, setLoadingMoreComments] = useState(false)
+  const [loadingInitialComments, setLoadingInitialComments] = useState(false)
+  const [hasMoreComments, setHasMoreComments] = useState(true)
+  const [commentsOffset, setCommentsOffset] = useState(0)
 
   const formattedDate = createdAt
     ? new Date(createdAt).toLocaleDateString(undefined, {
@@ -113,6 +122,11 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
       if (onCommentAdded) {
         onCommentAdded(postId, data)
       }
+
+      // If all comments are shown, add the new comment to the list
+      if (showAllComments) {
+        setAllComments((prev) => [data, ...prev])
+      }
     } catch (err) {
       setCommentError(err?.response?.data?.message || 'Failed to post comment')
     } finally {
@@ -136,6 +150,69 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
     setCommentImage(null)
     setCommentImagePreview('')
   }
+
+  const loadMoreComments = useCallback(async () => {
+    if (loadingMoreComments || !hasMoreComments) return
+
+    setLoadingMoreComments(true)
+    try {
+      const newComments = await getComments(postId, { limit: COMMENTS_PER_PAGE, offset: commentsOffset })
+      if (!newComments || newComments.length === 0) {
+        setHasMoreComments(false)
+        return
+      }
+      setAllComments((prev) => {
+        const existingIds = new Set(prev.map((c) => c.id))
+        const uniqueNew = newComments.filter((c) => !existingIds.has(c.id))
+        return [...prev, ...uniqueNew]
+      })
+      setCommentsOffset((prev) => prev + COMMENTS_PER_PAGE)
+      if (newComments.length < COMMENTS_PER_PAGE) {
+        setHasMoreComments(false)
+      }
+    } catch (err) {
+      console.error('Failed to load more comments:', err)
+    } finally {
+      setLoadingMoreComments(false)
+    }
+  }, [loadingMoreComments, hasMoreComments, commentsOffset, postId])
+
+  const handleShowAllComments = useCallback(async () => {
+    if (showAllComments) {
+      setShowAllComments(false)
+      setAllComments([])
+      setCommentsOffset(0)
+      setHasMoreComments(true)
+      return
+    }
+
+    setShowAllComments(true)
+    setLoadingInitialComments(true)
+    try {
+      const comments = await getComments(postId, { limit: COMMENTS_PER_PAGE, offset: 0 })
+      setAllComments(comments || [])
+      setCommentsOffset(COMMENTS_PER_PAGE)
+      if (!comments || comments.length < COMMENTS_PER_PAGE) {
+        setHasMoreComments(false)
+      } else {
+        setHasMoreComments(true)
+      }
+    } catch (err) {
+      console.error('Failed to load comments:', err)
+      setHasMoreComments(false)
+    } finally {
+      setLoadingInitialComments(false)
+    }
+  }, [showAllComments, postId])
+
+  const handleCommentAdded = useCallback((newComment) => {
+    if (onCommentAdded) {
+      onCommentAdded(postId, newComment)
+    }
+    if (showAllComments) {
+      setAllComments((prev) => [newComment, ...prev])
+    }
+  }, [onCommentAdded, postId, showAllComments])
 
   const privacyColors = {
     public: 'bg-green-100 text-green-700',
@@ -227,55 +304,108 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
         </Link>
       </div>
 
-      {/* Comment Preview */}
-      {commentPreview && commentPreview.length > 0 && !showCommentForm && (
-        <div className="border-t border-gray-100 px-4 py-3 space-y-3">
-          {commentPreview.slice(0, 3).map((comment) => (
-            <div key={comment.id} className="flex gap-3">
-              <Avatar
-                src={comment.authorAvatar}
-                alt={comment.authorName}
-                fallback={comment.authorName?.[0]?.toUpperCase() || '?'}
-                size="sm"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-gray-900">{comment.authorName}</span>
-                  <span className="text-xs text-gray-400">•</span>
-                  <span className="text-xs text-gray-400">
-                    {new Date(comment.createdAt || comment.created_at).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-gray-800 line-clamp-2">{comment.content}</p>
-                <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
-                  {comment.likesCount > 0 && (
-                    <span className="flex items-center gap-1">
-                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.387 10.203 4.167 9.083 5.058 9.083h1.051c.491 0 .937.238 1.204.612.27.375.436.851.436 1.355 0 .085-.01.17-.029.252M12 15.75c-1.148 0-2.25-.47-3.06-1.3a4.501 4.501 0 00-1.08-1.08" />
-                      </svg>
-                      {comment.likesCount > 0 && <span>{comment.likesCount}</span>}
+      {/* Comments Section */}
+      <div className="border-t border-gray-100">
+        {/* Comment Preview (when not expanded) */}
+        {!showAllComments && commentPreview && commentPreview.length > 0 && !showCommentForm && (
+          <div className="px-4 py-3 space-y-3">
+            {commentPreview.slice(0, 3).map((comment) => (
+              <div key={comment.id} className="flex gap-3">
+                <Avatar
+                  src={comment.authorAvatar}
+                  alt={comment.authorName}
+                  fallback={comment.authorName?.[0]?.toUpperCase() || '?'}
+                  size="sm"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">{comment.authorName}</span>
+                    <span className="text-xs text-gray-400">•</span>
+                    <span className="text-xs text-gray-400">
+                      {new Date(comment.createdAt || comment.created_at).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
                     </span>
-                  )}
-                  {comment.replies?.length > 0 && (
-                    <span>{comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}</span>
-                  )}
+                  </div>
+                  <p className="mt-1 text-sm text-gray-800 line-clamp-2">{comment.content}</p>
+                  <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                    {comment.likesCount > 0 && (
+                      <span className="flex items-center gap-1">
+                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.387 10.203 4.167 9.083 5.058 9.083h1.051c.491 0 .937.238 1.204.612.27.375.436.851.436 1.355 0 .085-.01.17-.029.252M12 15.75c-1.148 0-2.25-.47-3.06-1.3a4.501 4.501 0 00-1.08-1.08" />
+                        </svg>
+                        {comment.likesCount > 0 && <span>{comment.likesCount}</span>}
+                      </span>
+                    )}
+                    {comment.replies?.length > 0 && (
+                      <span>{comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}</span>
+                    )}
+                  </div>
                 </div>
               </div>
+            ))}
+            {commentsCount > 3 && (
+              <button
+                onClick={handleShowAllComments}
+                className="w-full text-left text-sm font-medium text-blue-600 hover:text-blue-700 py-2"
+              >
+                View all {commentsCount} comments
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Loading Initial Comments */}
+        {showAllComments && loadingInitialComments && (
+          <div className="px-4 py-6 text-center">
+            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Loading comments...
             </div>
-          ))}
-          {commentsCount > 3 && (
-            <Link
-              href={`/post/${postId}`}
-              className="text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
-              View all {commentsCount} comments
-            </Link>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+
+        {/* Expanded Comments List */}
+        {showAllComments && !loadingInitialComments && (
+          <div className="px-4 py-3 space-y-4">
+            <CommentList
+              comments={allComments}
+              postId={postId}
+              onCommentAdded={handleCommentAdded}
+            />
+            {hasMoreComments && (
+              <div className="text-center pt-2">
+                <button
+                  onClick={loadMoreComments}
+                  disabled={loadingMoreComments}
+                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-blue-600 transition-all duration-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loadingMoreComments ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Loading more comments...
+                    </>
+                  ) : (
+                    'View More Comments'
+                  )}
+                </button>
+              </div>
+            )}
+            {!hasMoreComments && allComments.length > 0 && (
+              <div className="text-center pt-2 text-sm text-gray-500">
+                No more comments
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Inline Comment Form */}
       {showCommentForm && (

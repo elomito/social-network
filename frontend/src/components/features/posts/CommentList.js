@@ -1,9 +1,11 @@
 // src/components/features/posts/CommentList.js
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import Avatar from '@/components/ui/Avatar'
-import { createComment, addCommentReaction, removeCommentReaction } from '@/lib/apiClient'
+import { getComments, createComment, addCommentReaction, removeCommentReaction } from '@/lib/apiClient'
+
+const COMMENTS_PER_PAGE = 10
 
 function CommentItem({ comment, postId, depth = 0, onReplyAdded, onReactionChange }) {
   const [showReplyForm, setShowReplyForm] = useState(false)
@@ -249,10 +251,21 @@ function buildCommentTree(comments) {
   return roots
 }
 
-export default function CommentList({ comments, postId, onCommentAdded, onReactionChange }) {
-  const [localComments, setLocalComments] = useState(() => buildCommentTree(comments || []))
+// Merge new comments with existing comments, avoiding duplicates
+function mergeComments(existingComments, newComments) {
+  const existingIds = new Set(existingComments.map((c) => c.id))
+  const uniqueNewComments = newComments.filter((c) => !existingIds.has(c.id))
+  return [...existingComments, ...uniqueNewComments]
+}
 
-  const handleReplyAdded = (parentId, newReply) => {
+export default function CommentList({ comments: initialComments, postId, onCommentAdded, onReactionChange }) {
+  const [localComments, setLocalComments] = useState(() => buildCommentTree(initialComments || []))
+  const [flatComments, setFlatComments] = useState(initialComments || [])
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMoreComments, setHasMoreComments] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  const handleReplyAdded = useCallback((parentId, newReply) => {
     setLocalComments((prev) => {
       const addReplyToComment = (comments) => {
         return comments.map((comment) => {
@@ -274,12 +287,60 @@ export default function CommentList({ comments, postId, onCommentAdded, onReacti
       return addReplyToComment(prev)
     })
 
+    // Also update flat comments list
+    setFlatComments((prev) => {
+      if (prev.some((c) => c.id === newReply.id)) return prev
+      return [...prev, newReply]
+    })
+
     if (onCommentAdded) {
       onCommentAdded(newReply)
     }
-  }
+  }, [onCommentAdded])
 
-  if (!localComments || localComments.length === 0) {
+  const loadMoreComments = useCallback(async () => {
+    if (loadingMore || !hasMoreComments) return
+
+    setLoadingMore(true)
+    setLoadError('')
+
+    try {
+      const offset = flatComments.length
+      const newComments = await getComments(postId, { limit: COMMENTS_PER_PAGE, offset })
+
+      if (!newComments || newComments.length === 0) {
+        setHasMoreComments(false)
+        return
+      }
+
+      // Merge new comments with existing, avoiding duplicates
+      setFlatComments((prev) => mergeComments(prev, newComments))
+
+      // If we got fewer comments than requested, there are no more
+      if (newComments.length < COMMENTS_PER_PAGE) {
+        setHasMoreComments(false)
+      }
+    } catch (err) {
+      setLoadError(err?.response?.data?.message || 'Failed to load more comments')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, hasMoreComments, flatComments.length, postId])
+
+  // Rebuild tree whenever flat comments change
+  const commentTree = useMemo(() => buildCommentTree(flatComments), [flatComments])
+
+  const handleCommentAdded = useCallback((newComment) => {
+    setFlatComments((prev) => {
+      if (prev.some((c) => c.id === newComment.id)) return prev
+      return [...prev, newComment]
+    })
+    if (onCommentAdded) {
+      onCommentAdded(newComment)
+    }
+  }, [onCommentAdded])
+
+  if (!commentTree || commentTree.length === 0) {
     return (
       <div className="py-8 text-center">
         <p className="text-sm text-gray-500">No comments yet. Be the first to comment!</p>
@@ -289,7 +350,7 @@ export default function CommentList({ comments, postId, onCommentAdded, onReacti
 
   return (
     <div className="space-y-6">
-      {localComments.map((comment) => (
+      {commentTree.map((comment) => (
         <CommentItem
           key={comment.id}
           comment={comment}
@@ -299,6 +360,31 @@ export default function CommentList({ comments, postId, onCommentAdded, onReacti
           onReactionChange={onReactionChange}
         />
       ))}
+
+      {hasMoreComments && (
+        <div className="text-center pt-4">
+          <button
+            onClick={loadMoreComments}
+            disabled={loadingMore}
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-blue-600 transition-all duration-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loadingMore ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Loading more comments...
+              </>
+            ) : (
+              'View More Comments'
+            )}
+          </button>
+          {loadError && (
+            <p className="mt-2 text-sm text-red-600">{loadError}</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

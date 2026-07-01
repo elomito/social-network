@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"backend/internal/middleware"
@@ -32,6 +33,22 @@ func GetCommentsHandler(db *sql.DB) http.HandlerFunc {
 		postID := r.PathValue("id")
 		userIDStr := middleware.GetUserID(r)
 
+		// Parse pagination parameters
+		limit := 20 // default limit
+		offset := 0 // default offset
+
+		if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+			if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 100 {
+				limit = parsedLimit
+			}
+		}
+
+		if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+			if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+				offset = parsedOffset
+			}
+		}
+
 		rows, err := db.QueryContext(r.Context(), `
 			SELECT c.id, c.post_id, c.author_id, c.content, c.image_path, c.created_at, c.parent_id,
 			       u.first_name, u.last_name, u.nickname,
@@ -42,7 +59,8 @@ func GetCommentsHandler(db *sql.DB) http.HandlerFunc {
 			JOIN users u ON c.author_id = u.id
 			WHERE c.post_id = ?
 			ORDER BY c.created_at ASC
-		`, userIDStr, postID)
+			LIMIT ? OFFSET ?
+		`, userIDStr, postID, limit, offset)
 		if err != nil {
 			http.Error(w, "database query error: "+err.Error(), http.StatusInternalServerError)
 			return

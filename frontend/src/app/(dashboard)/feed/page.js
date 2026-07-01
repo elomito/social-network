@@ -58,7 +58,7 @@ export default function FeedPage() {
           const previews = {}
           for (const post of fetchedPosts) {
             try {
-              const comments = await getComments(post.id)
+              const comments = await getComments(post.id, { limit: 3, offset: 0 })
               previews[post.id] = comments || []
             } catch (err) {
               previews[post.id] = []
