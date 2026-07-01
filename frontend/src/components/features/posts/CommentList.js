@@ -1,7 +1,7 @@
 // src/components/features/posts/CommentList.js
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import { useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { createComment, addCommentReaction, removeCommentReaction } from '@/lib/apiClient'
 
@@ -13,13 +13,14 @@ function CommentItem({ comment, postId, depth = 0, onReplyAdded, onReactionChang
   const [optimisticReaction, setOptimisticReaction] = useState(comment.userReaction || null)
   const [reactionLoading, setReactionLoading] = useState(false)
 
-  const formattedDate = comment.createdAt || comment.created_at
-    ? new Date(comment.createdAt || comment.created_at).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : 'Just now'
+  const formattedDate =
+    comment.createdAt || comment.created_at
+      ? new Date(comment.createdAt || comment.created_at).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : 'Just now'
 
   const handleReplySubmit = async (e) => {
     e.preventDefault()
@@ -84,18 +85,22 @@ function CommentItem({ comment, postId, depth = 0, onReplyAdded, onReactionChang
         fallback={comment.authorName?.[0]?.toUpperCase() || '?'}
         size={depth > 0 ? 'sm' : 'md'}
       />
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-gray-900">{comment.authorName}</span>
           <span className="text-xs text-gray-400">•</span>
           <span className="text-xs text-gray-400">{formattedDate}</span>
         </div>
-        <p className="mt-1 text-sm text-gray-800 whitespace-pre-wrap">{comment.content}</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{comment.content}</p>
 
         {/* Comment Image */}
         {comment.imageUrl && (
           <div className="mt-2">
-            <img src={comment.imageUrl} alt="Comment attachment" className="max-h-48 rounded-xl object-cover" />
+            <img
+              src={comment.imageUrl}
+              alt="Comment attachment"
+              className="max-h-48 rounded-xl object-cover"
+            />
           </div>
         )}
 
@@ -110,8 +115,18 @@ function CommentItem({ comment, postId, depth = 0, onReplyAdded, onReactionChang
                 : 'text-gray-500 hover:bg-gray-100 hover:text-blue-600'
             }`}
           >
-            <svg className="h-3.5 w-3.5" fill={optimisticReaction === 'like' ? 'currentColor' : 'none'} viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.387 10.203 4.167 9.083 5.058 9.083h1.051c.491 0 .937.238 1.204.612.27.375.436.851.436 1.355 0 .085-.01.17-.029.252M12 15.75c-1.148 0-2.25-.47-3.06-1.3a4.501 4.501 0 00-1.08-1.08" />
+            <svg
+              className="h-3.5 w-3.5"
+              fill={optimisticReaction === 'like' ? 'currentColor' : 'none'}
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.387 10.203 4.167 9.083 5.058 9.083h1.051c.491 0 .937.238 1.204.612.27.375.436.851.436 1.355 0 .085-.01.17-.029.252M12 15.75c-1.148 0-2.25-.47-3.06-1.3a4.501 4.501 0 00-1.08-1.08"
+              />
             </svg>
             <span>{comment.likesCount > 0 ? comment.likesCount : 'Like'}</span>
           </button>
@@ -120,8 +135,18 @@ function CommentItem({ comment, postId, depth = 0, onReplyAdded, onReactionChang
             onClick={() => setShowReplyForm(!showReplyForm)}
             className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-gray-500 transition-all duration-200 hover:bg-gray-100 hover:text-blue-600"
           >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
+            <svg
+              className="h-3.5 w-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
+              />
             </svg>
             <span>Reply</span>
           </button>
@@ -195,13 +220,37 @@ function CommentItem({ comment, postId, depth = 0, onReplyAdded, onReactionChang
   )
 }
 
-export default function CommentList({ comments, postId, onCommentAdded, onReactionChange }) {
-  const [localComments, setLocalComments] = useState(comments || [])
+// Build comment tree from flat list (parent comments at root, replies nested)
+function buildCommentTree(comments) {
+  const commentMap = new Map()
+  const roots = []
 
-  // Update local comments when props change
-  React.useEffect(() => {
-    setLocalComments(comments || [])
-  }, [comments])
+  // First pass: create map of all comments with empty replies array
+  comments.forEach((comment) => {
+    commentMap.set(comment.id, { ...comment, replies: [] })
+  })
+
+  // Second pass: build tree
+  comments.forEach((comment) => {
+    const commentWithReplies = commentMap.get(comment.id)
+    if (comment.parent_id) {
+      const parent = commentMap.get(comment.parent_id)
+      if (parent) {
+        parent.replies.push(commentWithReplies)
+      } else {
+        // Parent not found (shouldn't happen), treat as root
+        roots.push(commentWithReplies)
+      }
+    } else {
+      roots.push(commentWithReplies)
+    }
+  })
+
+  return roots
+}
+
+export default function CommentList({ comments, postId, onCommentAdded, onReactionChange }) {
+  const [localComments, setLocalComments] = useState(() => buildCommentTree(comments || []))
 
   const handleReplyAdded = (parentId, newReply) => {
     setLocalComments((prev) => {
@@ -232,7 +281,7 @@ export default function CommentList({ comments, postId, onCommentAdded, onReacti
 
   if (!localComments || localComments.length === 0) {
     return (
-      <div className="text-center py-8">
+      <div className="py-8 text-center">
         <p className="text-sm text-gray-500">No comments yet. Be the first to comment!</p>
       </div>
     )

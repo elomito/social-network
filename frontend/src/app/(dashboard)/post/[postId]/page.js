@@ -267,7 +267,12 @@ export default function PostDetailPage() {
           <h3 className="mb-4 text-sm font-semibold text-gray-900">
             {comments.length} {comments.length === 1 ? 'Comment' : 'Comments'}
           </h3>
-          <CommentList comments={comments} postId={postId} onCommentAdded={handleCommentAdded} />
+          <CommentList
+            key={comments.length}
+            comments={comments}
+            postId={postId}
+            onCommentAdded={handleCommentAdded}
+          />
         </div>
       </div>
     </div>
