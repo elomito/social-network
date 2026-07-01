@@ -255,7 +255,7 @@ func DiscoverUsersHandler(db *sql.DB, followSvc *services.FollowService) http.Ha
 		query := q.Get("query")
 
 		rows, err := db.QueryContext(r.Context(), `
-			SELECT id, first_name, last_name, nickname, email
+			SELECT id, first_name, last_name, nickname, email, about_me
 			FROM users
 			WHERE (first_name LIKE ? OR last_name LIKE ? OR nickname LIKE ? OR email LIKE ?)
 			  AND id != ?
@@ -268,34 +268,52 @@ func DiscoverUsersHandler(db *sql.DB, followSvc *services.FollowService) http.Ha
 		defer rows.Close()
 
 		type DiscoverUserResponse struct {
-			ID          string `json:"id"`
-			Username    string `json:"username"`
-			FullName    string `json:"fullName"`
-			IsFollowing bool   `json:"isFollowing"`
+			ID             string `json:"id"`
+			Username       string `json:"username"`
+			FullName       string `json:"fullName"`
+			IsFollowing    bool   `json:"isFollowing"`
+			FollowersCount int    `json:"followersCount"`
+			Bio            string `json:"bio"`
 		}
 
 		users := []DiscoverUserResponse{}
 		for rows.Next() {
-			var id, firstName, lastName, nickname, email string
-			if err := rows.Scan(&id, &firstName, &lastName, &nickname, &email); err != nil {
+			var id, firstName, lastName, nickname, email, aboutMe sql.NullString
+			if err := rows.Scan(&id, &firstName, &lastName, &nickname, &email, &aboutMe); err != nil {
 				continue
 			}
 
-			userUUID, err := uuid.Parse(id)
+			userUUID, err := uuid.Parse(id.String)
 			if err != nil {
 				continue
 			}
 
-			username := nickname
+			username := nickname.String
 			if username == "" {
-				username = email
+				username = email.String
+			}
+
+			// Get follower count
+			var followersCount int
+			err = db.QueryRowContext(r.Context(), `
+				SELECT COUNT(1) FROM follows WHERE following_id = ?
+			`, id.String).Scan(&followersCount)
+			if err != nil {
+				followersCount = 0
+			}
+
+			bio := ""
+			if aboutMe.Valid {
+				bio = aboutMe.String
 			}
 
 			users = append(users, DiscoverUserResponse{
-				ID:          id,
-				Username:    username,
-				FullName:    firstName + " " + lastName,
-				IsFollowing: followSvc.IsFollowing(actorID, userUUID),
+				ID:             id.String,
+				Username:       username,
+				FullName:       firstName.String + " " + lastName.String,
+				IsFollowing:    followSvc.IsFollowing(actorID, userUUID),
+				FollowersCount: followersCount,
+				Bio:            bio,
 			})
 		}
 
