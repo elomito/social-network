@@ -196,8 +196,8 @@ export async function reactToComment(commentId, reaction) {
 // first.
 // ---------------------------------------------------------------------------
 
-export async function getGroups() {
-  const { data } = await apiClient.get('/groups')
+export async function getGroups(params = {}) {
+  const { data } = await apiClient.get('/groups', { params })
   return data
 }
 

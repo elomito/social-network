@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import GroupCard from '@/components/features/groups/GroupCard'
+import { getGroups, createGroup } from '@/lib/apiClient'
 
 export default function GroupsPage() {
   const [search, setSearch] = useState('')
@@ -16,11 +17,8 @@ export default function GroupsPage() {
   const fetchGroups = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/groups?search=${encodeURIComponent(search)}`, {
-        credentials: 'include',
-      })
-      if (!response.ok) throw new Error('Failed to fetch groups')
-      const data = await response.json()
+      const params = search ? { search } : {}
+      const data = await getGroups(params)
       setGroups(data || [])
     } catch (err) {
       console.error(err)
@@ -39,23 +37,14 @@ export default function GroupsPage() {
     setCreating(true)
     setError('')
     try {
-      const response = await fetch('/api/groups', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ title, description }),
-      })
-      if (!response.ok) {
-        throw new Error('Failed to create group. Please try again.')
-      }
+      await createGroup({ title, description })
       setTitle('')
       setDescription('')
       setCreateOpen(false)
       fetchGroups()
     } catch (err) {
-      setError(err.message)
+      const payload = err?.response?.data
+      setError(payload?.message || err.message || 'Failed to create group. Please try again.')
     } finally {
       setCreating(false)
     }

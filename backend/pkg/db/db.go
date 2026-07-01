@@ -33,6 +33,7 @@ var legacyUsersColumns = []schemaColumn{
 }
 
 var legacySchemaColumns = []schemaColumn{
+	{table: "images", name: "id", definition: "id TEXT NOT NULL PRIMARY KEY"},
 	{table: "images", name: "user_id", definition: "user_id INTEGER NOT NULL"},
 	{table: "images", name: "image_url", definition: "image_url TEXT NOT NULL"},
 	{table: "images", name: "created_at", definition: "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"},

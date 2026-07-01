@@ -43,17 +43,17 @@ export default function PostComposer({ onPostCreated }) {
     setError('')
 
     try {
-      let imageId = null
+      let imageUrl = null
 
       if (imageFile) {
         const uploadData = await uploadImage(imageFile)
-        imageId = uploadData.id
+        imageUrl = uploadData.image_url
       }
 
       const data = await createPost({
         content: content.trim(),
         privacy_level: privacy,
-        image_id: imageId,
+        image_url: imageUrl,
       })
 
       setContent('')
