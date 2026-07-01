@@ -66,6 +66,8 @@ var legacySchemaColumns = []schemaColumn{
 	{table: "comments", name: "image_path", definition: "image_path TEXT"},
 	{table: "comments", name: "created_at", definition: "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
 	{table: "comments", name: "updated_at", definition: "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
+	{table: "comments", name: "parent_id", definition: "parent_id TEXT REFERENCES comments(id) ON DELETE CASCADE"},
+	{table: "comments", name: "parent_id", definition: "parent_id TEXT REFERENCES comments(id) ON DELETE CASCADE"},
 
 	{table: "groups", name: "title", definition: "title TEXT NOT NULL"},
 	{table: "groups", name: "description", definition: "description TEXT NOT NULL"},
