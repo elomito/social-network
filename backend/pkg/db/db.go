@@ -67,7 +67,6 @@ var legacySchemaColumns = []schemaColumn{
 	{table: "comments", name: "created_at", definition: "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
 	{table: "comments", name: "updated_at", definition: "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
 	{table: "comments", name: "parent_id", definition: "parent_id TEXT REFERENCES comments(id) ON DELETE CASCADE"},
-	{table: "comments", name: "parent_id", definition: "parent_id TEXT REFERENCES comments(id) ON DELETE CASCADE"},
 
 	{table: "groups", name: "title", definition: "title TEXT NOT NULL"},
 	{table: "groups", name: "description", definition: "description TEXT NOT NULL"},
@@ -200,6 +199,33 @@ func ensureLegacySchemaColumns(db *sql.DB) error {
 	return ensureLegacyColumns(db, legacySchemaColumns)
 }
 
+// ensureCommentReactionsTable creates the comment_reactions table if it doesn't exist
+func ensureCommentReactionsTable(db *sql.DB) error {
+	exists, err := tableExists(db, "comment_reactions")
+	if err != nil {
+		return fmt.Errorf("failed to check comment_reactions table existence: %w", err)
+	}
+	if exists {
+		return nil
+	}
+
+	log.Println("🔧 [MIGRATION] Creating missing comment_reactions table...")
+	_, err = db.Exec(`
+		CREATE TABLE comment_reactions (
+			user_id       TEXT NOT NULL,
+			comment_id    TEXT NOT NULL,
+			reaction_type TEXT NOT NULL CHECK (reaction_type IN ('like', 'dislike')),
+			PRIMARY KEY (user_id, comment_id),
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create comment_reactions table: %w", err)
+	}
+	return nil
+}
+
 // getMigrationPath returns the absolute path to the migrations directory
 func getMigrationPath() string {
 	// Get the current working directory
@@ -237,6 +263,9 @@ func RunMigrations(db *sql.DB) error {
 	}
 	if err := ensureLegacySchemaColumns(db); err != nil {
 		return fmt.Errorf("failed to ensure legacy schema columns: %w", err)
+	}
+	if err := ensureCommentReactionsTable(db); err != nil {
+		return fmt.Errorf("failed to ensure comment_reactions table: %w", err)
 	}
 
 	// tels migaratin engine to accept our sqlite we  are using
