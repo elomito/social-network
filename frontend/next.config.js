@@ -1,3 +1,5 @@
+const path = require('path')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -14,21 +16,19 @@ const nextConfig = {
       bodySizeLimit: '2mb',
     },
   },
-  // Proxy API requests to backend to enable same-origin cookies
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:8080/api/:path*',
-      },
-    ]
-  },
-  // Configure path aliases for Turbopack
   turbopack: {
+    root: __dirname,
     resolveAlias: {
-      '@/*': './src/*',
+      // Turbopack requires explicit glob-style mapping for wildcard aliases.
+      // A plain '@' key only matches the literal string '@', not '@/foo/bar'.
+      // The correct form maps '@/*' to the array of possible expansions.
+      '@/*': ['./src/*'],
     },
   },
-};
+  webpack: (config) => {
+    config.resolve.alias['@'] = path.resolve(__dirname, 'src')
+    return config
+  },
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig

@@ -1,5 +1,347 @@
 'use client'
 
+<<<<<<< HEAD
+import React, { useEffect, useState, useCallback } from 'react'
+import GroupHeader from '@/components/features/groups/GroupHeader'
+import EventCard from '@/components/features/groups/EventCard'
+import GroupChatPanel from '@/components/features/groups/GroupChatPanel'
+import { useAuth } from '@/hooks/useAuth'
+import {
+  getGroup,
+  requestToJoinGroup,
+  leaveGroup,
+  getGroupEvents,
+  createEvent,
+  respondToEvent,
+  inviteToGroup,
+  TODO_BACKEND_getGroupMembers,
+  TODO_BACKEND_getGroupInvitations,
+  TODO_BACKEND_respondToGroupInvitation,
+  TODO_BACKEND_getGroupJoinRequests,
+  TODO_BACKEND_respondToJoinRequest,
+  TODO_BACKEND_getGroupPosts,
+  TODO_BACKEND_createGroupPost,
+} from '@/lib/apiClient'
+
+export default function GroupPage({ params }) {
+  const { groupId } = params
+  const { user } = useAuth()
+
+  const [group, setGroup] = useState(null)
+  const [members, setMembers] = useState([])
+  const [invitations, setInvitations] = useState([])
+  const [joinRequests, setJoinRequests] = useState([])
+  const [isMember, setIsMember] = useState(false)
+  const [isCreator, setIsCreator] = useState(false)
+  const [posts, setPosts] = useState([])
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [inviteModalOpen, setInviteModalOpen] = useState(false)
+  const [inviteeId, setInviteeId] = useState('')
+
+  const loadGroup = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const g = await getGroup(groupId)
+      setGroup(g)
+      setIsCreator(Boolean(user && g && user.id === g.creator_id))
+
+      // Member list, invitations, and join requests are not yet supported
+      // by the backend (see TODO_BACKEND_* in lib/apiClient.js). These
+      // calls are wrapped so a 404 degrades to an empty list instead of
+      // crashing the page.
+      const membersResp = await TODO_BACKEND_getGroupMembers(groupId).catch(() => [])
+      setMembers(membersResp)
+
+      const amMember = membersResp.some((m) => m.id === user?.id)
+      setIsMember(amMember)
+
+      if (amMember) {
+        const inv = await TODO_BACKEND_getGroupInvitations(groupId).catch(() => [])
+        setInvitations(inv)
+
+        const postsResp = await TODO_BACKEND_getGroupPosts(groupId).catch(() => [])
+        setPosts(postsResp)
+      }
+
+      if (user && g && user.id === g.creator_id) {
+        const reqs = await TODO_BACKEND_getGroupJoinRequests(groupId).catch(() => [])
+        setJoinRequests(reqs)
+      }
+
+      const ev = await getGroupEvents(groupId).catch(() => [])
+      setEvents(ev || [])
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to load this group.')
+    } finally {
+      setLoading(false)
+    }
+  }, [groupId, user])
+
+  useEffect(() => {
+    loadGroup()
+  }, [loadGroup])
+
+  async function handleJoinToggle() {
+    try {
+      if (!isMember) {
+        await requestToJoinGroup(groupId)
+      } else {
+        await leaveGroup(groupId)
+      }
+      await loadGroup()
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Could not update membership.')
+    }
+  }
+
+  async function sendInvite() {
+    if (!inviteeId.trim()) return
+    try {
+      await inviteToGroup(groupId, inviteeId.trim())
+      const inv = await TODO_BACKEND_getGroupInvitations(groupId).catch(() => [])
+      setInvitations(inv)
+      setInviteModalOpen(false)
+      setInviteeId('')
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to send invite.')
+    }
+  }
+
+  async function handleRespondInvite(invitationId, accept) {
+    try {
+      await TODO_BACKEND_respondToGroupInvitation(groupId, invitationId, accept)
+      const inv = await TODO_BACKEND_getGroupInvitations(groupId).catch(() => [])
+      setInvitations(inv)
+      if (accept) {
+        const membersResp = await TODO_BACKEND_getGroupMembers(groupId).catch(() => [])
+        setMembers(membersResp)
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to respond to invitation.')
+    }
+  }
+
+  async function handleRespondJoinRequest(requestId, approve) {
+    try {
+      await TODO_BACKEND_respondToJoinRequest(groupId, requestId, approve)
+      const reqs = await TODO_BACKEND_getGroupJoinRequests(groupId).catch(() => [])
+      setJoinRequests(reqs)
+      if (approve) {
+        const membersResp = await TODO_BACKEND_getGroupMembers(groupId).catch(() => [])
+        setMembers(membersResp)
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to respond to join request.')
+    }
+  }
+
+  async function handleCreatePost(event) {
+    event.preventDefault()
+    const content = event.target.elements.content.value
+    if (!content) return
+    try {
+      await TODO_BACKEND_createGroupPost(groupId, content)
+      const postsResp = await TODO_BACKEND_getGroupPosts(groupId).catch(() => [])
+      setPosts(postsResp)
+      event.target.reset()
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to post.')
+    }
+  }
+
+  async function handleRSVP(eventId, status) {
+    try {
+      await respondToEvent(eventId, status)
+      const ev = await getGroupEvents(groupId).catch(() => [])
+      setEvents(ev || [])
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to RSVP.')
+    }
+  }
+
+  async function handleCreateEvent({ title, description, start_time }) {
+    try {
+      await createEvent({ group_id: groupId, title, description, start_time })
+      const ev = await getGroupEvents(groupId).catch(() => [])
+      setEvents(ev || [])
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to create event.')
+    }
+  }
+
+  if (loading) return <div className="p-6">Loading...</div>
+  if (error && !group) return <div className="p-6 text-red-600">{error}</div>
+  if (!group) return <div className="p-6">Group not found</div>
+
+  return (
+    <div className="flex gap-6 p-6">
+      <main className="max-w-3xl flex-1">
+        <GroupHeader
+          group={{
+            title: group.title,
+            description: group.description,
+            privacy: group.privacy || 'public',
+            cover_image_url: group.cover_image_url,
+            member_count: members.length,
+          }}
+          isMember={isMember}
+          onJoinToggle={handleJoinToggle}
+          onInvite={() => setInviteModalOpen(true)}
+        />
+
+        {error && (
+          <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
+        <section className="mb-6 rounded-lg bg-white p-4 shadow">
+          <h2 className="mb-3 text-lg font-semibold">Members</h2>
+          {members.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              Member listing isn&apos;t available yet — this feature is waiting on a backend
+              endpoint.
+            </p>
+          ) : (
+            <div className="grid max-h-56 grid-cols-2 gap-3 overflow-y-auto">
+              {members.map((m) => (
+                <div key={m.id} className="flex items-center gap-3 rounded p-2 hover:bg-gray-50">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-sm text-gray-500">
+                    {m.name ? m.name.charAt(0).toUpperCase() : '?'}
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{m.name}</div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      {m.role === 'creator' || m.role === 'admin' ? '👑 Creator' : '👤 Member'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="mb-6">
+          {!isMember && (
+            <div className="rounded border-l-4 border-yellow-400 bg-yellow-50 p-4">
+              <p className="text-sm">Join this group to view discussions and participate.</p>
+            </div>
+          )}
+
+          {isMember && (
+            <div>
+              <div className="mb-4 rounded-lg bg-white p-4 shadow">
+                <form onSubmit={handleCreatePost}>
+                  <textarea
+                    name="content"
+                    className="mb-3 w-full rounded border p-2"
+                    rows="3"
+                    placeholder="Share something with the group..."
+                  />
+                  <div className="text-right">
+                    <button type="submit" className="rounded bg-blue-600 px-4 py-2 text-white">
+                      Post
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="space-y-4">
+                {posts.map((p) => (
+                  <article key={p.id} className="rounded-lg bg-white p-4 shadow">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-sm text-gray-500">
+                        {p.author?.name ? p.author.name.charAt(0).toUpperCase() : '?'}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{p.author?.name || 'Unknown'}</div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(p.created_at).toLocaleString()}
+                        </div>
+                        <div className="mt-3 text-sm text-gray-800">{p.content}</div>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+
+                {posts.length === 0 && (
+                  <div className="text-gray-500">
+                    Group posts aren&apos;t available yet — this feature is waiting on a backend
+                    endpoint.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      </main>
+
+      <aside className="w-80 space-y-4">
+        <div className="rounded-lg bg-white p-4 shadow">
+          <h3 className="text-md mb-2 font-semibold">Events</h3>
+          {isMember ? (
+            <div className="space-y-3">
+              {events.map((event) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onRSVP={(status) => handleRSVP(event.id, status)}
+                />
+              ))}
+
+              {events.length === 0 && (
+                <p className="text-sm text-gray-500">No events yet.</p>
+              )}
+
+              <div className="rounded border p-3">
+                <h4 className="mb-2 font-semibold">Create event</h4>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    const title = e.target.elements.title.value
+                    const description = e.target.elements.description.value
+                    const start_time = e.target.elements.start_time.value
+                    if (!title || !start_time) return
+                    handleCreateEvent({ title, description, start_time })
+                    e.target.reset()
+                  }}
+                >
+                  <input
+                    name="title"
+                    placeholder="Event title"
+                    className="mb-2 w-full rounded border p-2"
+                  />
+                  <input
+                    name="start_time"
+                    type="datetime-local"
+                    className="mb-2 w-full rounded border p-2"
+                  />
+                  <textarea
+                    name="description"
+                    placeholder="Description"
+                    className="mb-2 w-full rounded border p-2"
+                  />
+                  <div className="text-right">
+                    <button className="rounded bg-green-600 px-3 py-1 text-white">Create</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">Join to see events</div>
+          )}
+        </div>
+
+        {isMember && <GroupChatPanel groupId={groupId} isOpen={isMember} />}
+
+        <div className="rounded-lg bg-white p-4 shadow">
+          <h3 className="text-md mb-2 font-semibold">About</h3>
+          <p className="text-sm text-gray-600">{group.description}</p>
+=======
 import React, { useState, useEffect } from 'react'
 import GroupCard from '@/components/features/groups/GroupCard'
 
@@ -187,8 +529,96 @@ export default function GroupsPage() {
               </div>
             </form>
           </div>
+>>>>>>> 3bea147bfe777202b750d7f18f2afbaa502a0ac2
         </div>
-      )}
+
+        {inviteModalOpen && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/40">
+            <div className="w-96 rounded-lg bg-white p-4">
+              <h4 className="mb-2 font-semibold">Invite a user</h4>
+              <input
+                value={inviteeId}
+                onChange={(e) => setInviteeId(e.target.value)}
+                placeholder="User ID"
+                className="mb-3 w-full rounded border p-2"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setInviteModalOpen(false)}
+                  className="rounded border px-3 py-1"
+                >
+                  Cancel
+                </button>
+                <button onClick={sendInvite} className="rounded bg-blue-600 px-3 py-1 text-white">
+                  Send invite
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {invitations.length > 0 && (
+          <div className="rounded-lg bg-white p-4 shadow">
+            <h4 className="mb-2 font-semibold">Invitations</h4>
+            {invitations.map((inv) => (
+              <div key={inv.id} className="flex items-center justify-between border-b p-2">
+                <div>
+                  <div className="text-sm font-medium">
+                    {inv.inviter?.name || 'Someone'} invited you
+                  </div>
+                  <div className="text-xs text-gray-500">Status: {inv.status}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleRespondInvite(inv.id, true)}
+                    className="rounded bg-green-600 px-2 py-1 text-white"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => handleRespondInvite(inv.id, false)}
+                    className="rounded border px-2 py-1"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isCreator && joinRequests.length > 0 && (
+          <div className="rounded-lg bg-white p-4 shadow">
+            <h4 className="mb-2 font-semibold">Join requests</h4>
+            {joinRequests.map((req) => (
+              <div key={req.id} className="flex items-center justify-between border-b p-2">
+                <div>
+                  <div className="text-sm font-medium">
+                    {req.user?.name || 'Someone'} requested to join
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(req.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleRespondJoinRequest(req.id, true)}
+                    className="rounded bg-green-600 px-2 py-1 text-white"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleRespondJoinRequest(req.id, false)}
+                    className="rounded border px-2 py-1"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </aside>
     </div>
   )
 }

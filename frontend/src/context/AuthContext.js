@@ -1,101 +1,84 @@
 'use client'
 
-import { createContext, useState, useEffect, useCallback, useRef } from 'react'
+import { createContext, useState, useEffect, useCallback } from 'react'
+import { getCurrentUser, login as loginRequest, logout as logoutRequest } from '@/lib/apiClient'
 
+// The backend sets an httpOnly session cookie on login (see docs/api.md:
+// POST /api/auth/login, POST /api/auth/logout). Because it's httpOnly, this
+// app never reads or stores the token itself — it only knows "am I logged
+// in?" by asking the backend via GET /api/auth/me, and relies on the browser
+// to attach the cookie automatically (apiClient is configured with
+// withCredentials: true).
 export const AuthContext = createContext({
-  token: null,
   user: null,
-  setToken: () => {},
   isAuthenticated: false,
   isLoading: true,
-  logout: () => {},
+  login: async () => {},
+  logout: async () => {},
+  refreshUser: async () => {},
 })
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('auth_token')
-    }
-    return null
-  })
   const [user, setUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const isAuthenticated = !!token
-
-  // Validate session whenever token changes
-  useEffect(() => {
-    if (!token) {
+  const refreshUser = useCallback(async () => {
+    try {
+      const currentUser = await getCurrentUser()
+      setUser(currentUser)
+      return currentUser
+    } catch {
       setUser(null)
-      setIsLoading(false)
-      return
+      return null
     }
+  }, [])
 
-    const validateSession = async () => {
-      try {
-        const response = await fetch('/api/auth/me', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setUser(data)
-        } else {
-          setToken(null)
-          setUser(null)
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('auth_token')
-          }
-        }
-      } catch (error) {
-        console.error('Session validation failed:', error)
-        setToken(null)
-        setUser(null)
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('auth_token')
-        }
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    validateSession()
-  }, [token, setToken])
-
-  // Persist token to localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      if (token) {
-        localStorage.setItem('auth_token', token)
-      } else {
-        localStorage.removeItem('auth_token')
+    let mounted = true
+    async function init() {
+      try {
+        const currentUser = await getCurrentUser()
+        if (mounted) setUser(currentUser)
+      } catch {
+        if (mounted) setUser(null)
+      } finally {
+        if (mounted) setIsLoading(false)
       }
     }
-  }, [token])
+    init()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const login = useCallback(async (credentials) => {
+    const result = await loginRequest(credentials)
+    // Cookie is set by the backend response itself. We still refresh the
+    // user from /auth/me so we never trust a client-guessed shape for the
+    // login response body.
+    await refreshUser()
+    return result
+  }, [refreshUser])
 
   const logout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      })
-    } catch (error) {
-      console.error('Logout failed:', error)
+      await logoutRequest()
     } finally {
-      setToken(null)
       setUser(null)
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth_token')
-      }
     }
   }, [])
 
   return (
-    <AuthContext.Provider value={{ token, user, setToken, isAuthenticated, isLoading, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: Boolean(user),
+        isLoading,
+        login,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

@@ -1,11 +1,7 @@
-'use client'
-
 import React from 'react'
-import { useAuth } from '@/hooks/useAuth'
 import ProtectedRoute from '@/context/ProtectedRoute'
-import Sidebar from '@/components/layout/Sidebar'
-import RightSidebar from '@/components/layout/RightSidebar'
 import Navbar from '@/components/layout/Navbar'
+import Sidebar from '@/components/layout/Sidebar'
 
 export default function DashboardLayout({ children }) {
   const { isLoading } = useAuth()
@@ -23,19 +19,13 @@ export default function DashboardLayout({ children }) {
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen flex-col bg-gray-50/50">
-        <Navbar />
-        <div className="app-grid container flex-1">
-          <aside className="sidebar">
-            <Sidebar />
-          </aside>
-          <main className="min-w-0">
-            {children}
-          </main>
-          <aside className="right-sidebar">
-            <RightSidebar />
-          </aside>
-        </div>
+      <Navbar />
+      <div className="app-grid container">
+        <aside className="sidebar">
+          <Sidebar />
+        </aside>
+        <main>{children}</main>
+        <div>{/* right column: placeholders for trends/ads */}</div>
       </div>
     </ProtectedRoute>
   )

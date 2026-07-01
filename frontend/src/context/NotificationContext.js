@@ -2,7 +2,12 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import useWebSocket from '@/hooks/useWebSocket'
-import apiClient from '@/lib/apiClient'
+import {
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from '@/lib/apiClient'
 
 const NotificationContext = createContext(null)
 
@@ -10,53 +15,51 @@ export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
 
-  // 1. Core API Sync Method (Used on initial load & reconnect fallback)
+  // The backend has two separate endpoints (list + unread count) — there is
+  // no single combined response, so we fetch both and merge client-side.
   const fetchNotifications = useCallback(async () => {
     try {
-      const response = await apiClient.get('/api/notifications')
-      if (response?.data) {
-        setNotifications(response.data.items || [])
-        setUnreadCount(response.data.unreadCount || 0)
-      }
+      const [list, unread] = await Promise.all([
+        getNotifications(),
+        getUnreadNotificationCount(),
+      ])
+      setNotifications(list || [])
+      setUnreadCount(unread?.count ?? 0)
     } catch (error) {
       console.error('Failed to sync notification updates:', error)
     }
   }, [])
 
-  // 2. Consume Shared WS Layer, filtering exclusively for 'notification' frames
-  const ws = useWebSocket('notification')
-  const { connected, connectionStatus } = ws
+  // Single subscription to the shared WebSocket, filtered to "notification"
+  // frames. This hook is called exactly once at the top level — calling it
+  // again inside an effect (as a previous version of this file did) breaks
+  // React's rules of hooks and double-subscribes the listener.
+  const { connectionStatus, onMessage } = useWebSocket('notification')
+  const connected = connectionStatus === 'CONNECTED'
 
-  // 3. Handle live incoming notifications
   useEffect(() => {
-    // If we're using the backwards-compatible useWebSocket, it returns an onMessage binder
-    const { onMessage } = ws
-
     const unsubscribe = onMessage((message) => {
-      // Expecting standard format payload or flat fallback object structure
-      const newNotification = message.payload || message
+      const newNotification = message?.payload || message
+      if (!newNotification) return
 
-      if (newNotification) {
-        // Instantly update badge count and list state arrays
-        setNotifications((prev) => [newNotification, ...prev])
-        setUnreadCount((prev) => prev + 1)
-      }
+      setNotifications((prev) => [newNotification, ...prev])
+      setUnreadCount((prev) => prev + 1)
     })
 
-    return () => unsubscribe()
-  }, [])
+    return unsubscribe
+  }, [onMessage])
 
-  // 4. Graceful Fallback Catch: Re-fetch missed messages on reconnect
+  // Re-sync on (re)connect, since any notifications missed while
+  // disconnected won't have arrived over the socket.
   useEffect(() => {
     if (connectionStatus === 'CONNECTED') {
       fetchNotifications()
     }
   }, [connectionStatus, fetchNotifications])
 
-  // 5. Context UI Management Actions
   const markAsRead = useCallback(async (notificationId) => {
     try {
-      await apiClient.post(`/api/notifications/${notificationId}/read`)
+      await markNotificationRead(notificationId)
       setNotifications((prev) =>
         prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
       )
@@ -66,15 +69,20 @@ export function NotificationProvider({ children }) {
     }
   }, [])
 
+  // There is no backend "mark all as read" route, so this fires one read
+  // call per currently-unread notification.
   const markAllAsRead = useCallback(async () => {
+    const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id)
+    if (unreadIds.length === 0) return
+
     try {
-      await apiClient.post('/api/notifications/read-all')
+      await markAllNotificationsRead(unreadIds)
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
       setUnreadCount(0)
     } catch (error) {
       console.error('Failed to clear unread counts:', error)
     }
-  }, [])
+  }, [notifications])
 
   const value = {
     notifications,

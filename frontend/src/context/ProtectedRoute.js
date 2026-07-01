@@ -1,8 +1,8 @@
 'use client'
 
-import { useAuth } from '../hooks/useAuth'
-import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth()
@@ -10,17 +10,14 @@ export default function ProtectedRoute({ children }) {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/auth/login')
+      router.push('/login')
     }
-  }, [isAuthenticated, isLoading, router])
+  }, [isLoading, isAuthenticated, router])
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-          <p className="text-sm text-gray-500">Loading...</p>
-        </div>
+      <div className="flex min-h-[50vh] items-center justify-center text-sm text-gray-500">
+        Loading...
       </div>
     )
   }

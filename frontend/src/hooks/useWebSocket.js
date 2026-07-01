@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
-import { useWebSocketContext } from '@/context/webSocketContext'
+import { useCallback } from 'react'
+import { useWebSocketContext } from '@/context/WebSocketContext'
 
 /**
  * Shared WebSocket Hook
@@ -12,13 +12,11 @@ export default function useWebSocket(filterType = '*') {
 
   const connected = connectionStatus === 'CONNECTED'
 
-  // Backwards-compatible legacy subscribe signature
   const onMessage = useCallback(
     (cb) => {
       const record = { type: filterType, callback: cb }
       listeners.add(record)
 
-      // Returns the exact unsubscribe function expected by legacy consumer components
       return () => {
         listeners.delete(record)
       }
@@ -28,7 +26,7 @@ export default function useWebSocket(filterType = '*') {
 
   return {
     connected,
-    connectionStatus, // Exposed for your new status indicators (CONNECTED, RECONNECTING, etc.)
+    connectionStatus,
     send,
     onMessage,
   }

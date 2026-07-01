@@ -1,3 +1,15 @@
+<<<<<<< HEAD
+import React from 'react'
+import RegisterForm from '@/components/features/auth/RegisterForm'
+
+export default function RegisterPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <RegisterForm />
+    </div>
+  )
+}
+=======
 'use client'
 
 import React, { useEffect } from 'react'
@@ -60,3 +72,4 @@ export default function RegisterPage() {
     </div>
   )
 }
+>>>>>>> 3bea147bfe777202b750d7f18f2afbaa502a0ac2

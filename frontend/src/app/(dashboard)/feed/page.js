@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import PostCard from '@/components/features/posts/PostCard'
-import PostComposer from '@/components/features/posts/PostComposer'
+import { getFeed } from '@/lib/apiClient'
 
 export default function FeedPage() {
   const [posts, setPosts] = useState([])
@@ -31,43 +31,43 @@ export default function FeedPage() {
     [loading, loadingMore, hasMore]
   )
 
-  const fetchFeedPosts = async (pageNumber, isInitialFetch = false) => {
-    try {
-      if (isInitialFetch) setLoading(true)
-      else setLoadingMore(true)
-
-      setError('')
-
-      const response = await fetch(`/api/posts?page=${pageNumber}&limit=10`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to retrieve your social feed.')
-      }
-
-      const data = await response.json()
-      const fetchedPosts = data || []
-
-      setPosts((prevPosts) => {
-        return isInitialFetch ? fetchedPosts : [...prevPosts, ...fetchedPosts]
-      })
-
-      setHasMore(fetchedPosts.length === 10)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-      setLoadingMore(false)
-    }
-  }
+  useEffect(() => {
+    return () => observer.current?.disconnect()
+  }, [])
 
   useEffect(() => {
-    fetchFeedPosts(page, page === 1)
+    let cancelled = false
+
+    async function fetchFeedPosts() {
+      const isInitialFetch = page === 1
+      try {
+        if (isInitialFetch) setLoading(true)
+        else setLoadingMore(true)
+        setError('')
+
+        // GET /api/posts is the documented feed endpoint (docs/api.md).
+        // Pagination isn't documented, but page/limit are sent as additive
+        // query params the backend can ignore safely if unsupported.
+        const data = await getFeed({ page, limit: 10 })
+        if (cancelled) return
+
+        const fetchedPosts = data?.posts || data || []
+        setPosts((prev) => (isInitialFetch ? fetchedPosts : [...prev, ...fetchedPosts]))
+        setHasMore(fetchedPosts.length === 10)
+      } catch (err) {
+        if (!cancelled) setError(err?.response?.data?.message || 'Failed to load your feed.')
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+          setLoadingMore(false)
+        }
+      }
+    }
+
+    fetchFeedPosts()
+    return () => {
+      cancelled = true
+    }
   }, [page])
 
   const handlePostCreated = (newPost) => {
@@ -76,15 +76,8 @@ export default function FeedPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-      {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-6 text-white shadow-lg">
-        <div className="relative z-10">
-          <h1 className="text-2xl font-bold">Welcome back! 👋</h1>
-          <p className="mt-1 text-blue-100">See what's happening in your network today.</p>
-        </div>
-        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10" />
-        <div className="absolute -bottom-4 -left-4 h-24 w-24 rounded-full bg-white/10" />
-        <div className="absolute right-12 bottom-4 h-16 w-16 rounded-full bg-white/5" />
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
+        <p className="text-sm text-gray-400">What&apos;s on your mind? (Composer UI coming soon)</p>
       </div>
 
       {/* COMPOSER */}
@@ -96,33 +89,25 @@ export default function FeedPage() {
         </div>
       )}
 
-      {/* FEED */}
       <div className="space-y-4">
         {loading ? (
           [1, 2, 3].map((n) => (
-            <div key={n} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm animate-pulse">
-              <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-full bg-gray-200" />
-                <div className="space-y-2">
-                  <div className="h-4 w-32 rounded bg-gray-200" />
-                  <div className="h-3 w-24 rounded bg-gray-200" />
+            <div key={n} className="animate-pulse space-y-4 rounded-lg bg-white p-6 shadow">
+              <div className="flex items-center space-x-3">
+                <div className="h-10 w-10 rounded-full bg-gray-200" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-1/4 rounded bg-gray-200" />
+                  <div className="h-3 w-1/6 rounded bg-gray-200" />
                 </div>
               </div>
-              <div className="mt-4 space-y-2">
-                <div className="h-4 w-full rounded bg-gray-200" />
-                <div className="h-4 w-5/6 rounded bg-gray-200" />
-              </div>
+              <div className="h-4 w-full rounded bg-gray-200" />
+              <div className="h-4 w-5/6 rounded bg-gray-200" />
             </div>
           ))
         ) : posts.length === 0 ? (
-          <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
-              <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">Your feed is quiet right now</h3>
-            <p className="mt-1 text-sm text-gray-500">Follow people to see posts here!</p>
+          <div className="rounded-lg border border-gray-100 bg-white py-12 text-center shadow">
+            <p className="text-lg font-medium text-gray-500">Your feed is quiet right now.</p>
+            <p className="mt-1 text-sm text-gray-400">Follow people to see posts here!</p>
           </div>
         ) : (
           posts.map((post, index) => {
@@ -132,9 +117,8 @@ export default function FeedPage() {
                   <PostCard post={post} />
                 </div>
               )
-            } else {
-              return <PostCard key={post.id} post={post} />
             }
+            return <PostCard key={post.id} post={post} />
           })
         )}
 

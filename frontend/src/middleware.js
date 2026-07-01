@@ -1,39 +1,54 @@
 import { NextResponse } from 'next/server'
 
+const AUTH_COOKIE_NAME = 'token'
+
+const PROTECTED_PREFIXES = [
+  '/feed',
+  '/discover',
+  '/groups',
+  '/messages',
+  '/notifications',
+  '/post',
+  '/profile',
+]
+
+const AUTH_ONLY_PATHS = ['/login', '/register']
+
 export function middleware(request) {
-  // Get the pathname of the request
-  const path = request.nextUrl.pathname
+  const { pathname } = request.nextUrl
+  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value
+  const isAuthenticated = Boolean(token)
 
-  // Define public paths that don't require authentication
-  const isPublicPath = path === '/auth/login' || path === '/auth/register' || path === '/'
+  const isProtectedRoute = PROTECTED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  )
+  const isAuthOnlyRoute = AUTH_ONLY_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  )
 
-  // Check for session cookie
-  const session = request.cookies.get('session_id')
-
-  // If there's no session and the path is not public, redirect to login
-  if (!session && !isPublicPath) {
-    return NextResponse.redirect(new URL('/auth/login', request.nextUrl))
+  if (isProtectedRoute && !isAuthenticated) {
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(loginUrl)
   }
 
-  // If there's a session and the path is public, redirect to feed
-  if (session && isPublicPath) {
-    return NextResponse.redirect(new URL('/feed', request.nextUrl))
+  if (isAuthOnlyRoute && isAuthenticated) {
+    return NextResponse.redirect(new URL('/feed', request.url))
   }
 
   return NextResponse.next()
 }
 
-// Configure the middleware to run on specific paths
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - api routes
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
+    '/feed/:path*',
+    '/discover/:path*',
+    '/groups/:path*',
+    '/messages/:path*',
+    '/notifications/:path*',
+    '/post/:path*',
+    '/profile/:path*',
+    '/login',
+    '/register',
   ],
 }

@@ -3,17 +3,19 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const { login } = useAuth()
   const router = useRouter()
-  const { setToken } = useAuth()
 
-  const validateForm = () => {
-    if (!email.includes('@')) {
+  function validateForm() {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('Please enter a valid email address.')
       return false
     }
@@ -24,40 +26,30 @@ export default function LoginForm() {
     return true
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  async function handleSubmit(event) {
+    event.preventDefault()
     setError('')
 
     if (!validateForm()) return
     setLoading(true)
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
-      })
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.message || 'Login failed')
-      }
-
-      // Set token to trigger auth state update
-      setToken('valid_session')
+      await login({ email, password })
       router.push('/feed')
     } catch (err) {
-      setError(err.message)
+      setError(err?.response?.data?.message || 'Login failed. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-md">
+      <h2 className="mb-6 text-center text-2xl font-bold text-gray-800">
+        Login to Social Network
+      </h2>
+
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
           {error}
