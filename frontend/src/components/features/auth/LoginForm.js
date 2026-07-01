@@ -10,7 +10,7 @@ export default function LoginForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const { setToken } = useAuth()
+  const { login } = useAuth()
 
   const validateForm = () => {
     if (!email.includes('@')) {
@@ -32,25 +32,11 @@ export default function LoginForm() {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
-      })
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.message || 'Login failed')
-      }
-
-      // Set token to trigger auth state update
-      setToken('valid_session')
+      await login({ email, password })
       router.push('/feed')
     } catch (err) {
-      setError(err.message)
+      const payload = err?.response?.data
+      setError(payload?.message || err.message || 'Login failed. Please try again.')
     } finally {
       setLoading(false)
     }

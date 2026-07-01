@@ -1,11 +1,12 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, use } from 'react'
 import PostCard from '@/components/features/posts/PostCard'
 import CommentList from '@/components/features/posts/CommentList'
+import { getPost, getComments, createComment, uploadImage } from '@/lib/apiClient'
 
 export default function PostDetailPage({ params }) {
-  const { postId } = params
+  const { postId } = use(params)
   const [post, setPost] = useState(null)
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -29,43 +30,20 @@ export default function PostDetailPage({ params }) {
         setError('')
         setCommentsError('')
 
-        const postResponse = await fetch(`/api/posts/${postId}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        })
-
-        if (!postResponse.ok) {
-          if (postResponse.status === 403) {
-            throw new Error('You do not have permission to view this post')
-          }
-          if (postResponse.status === 404) {
-            throw new Error('Post not found')
-          }
-          throw new Error('Failed to load post')
-        }
-
-        const postData = await postResponse.json()
+        const postData = await getPost(postId)
         setPost(postData)
 
-        const commentsResponse = await fetch(`/api/posts/${postId}/comments`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        })
-
-        if (!commentsResponse.ok) {
-          throw new Error('Failed to load comments')
-        }
-
-        const commentsData = await commentsResponse.json()
+        const commentsData = await getComments(postId)
         setComments(commentsData || [])
       } catch (err) {
-        setError(err.message)
+        const status = err?.response?.status
+        if (status === 403) {
+          setError('You do not have permission to view this post')
+        } else if (status === 404) {
+          setError('Post not found')
+        } else {
+          setError(err?.response?.data?.message || 'Failed to load post')
+        }
       } finally {
         setLoading(false)
         setLoadingComments(false)
@@ -102,39 +80,19 @@ export default function PostDetailPage({ params }) {
     try {
       let imageId = null
       if (imageFile) {
-        const uploadResponse = await fetch('/api/images/upload', {
-          method: 'POST',
-          credentials: 'include',
-          body: (() => {
-            const formData = new FormData()
-            formData.append('image', imageFile)
-            return formData
-          })(),
-        })
-
-        if (uploadResponse.ok) {
-          const uploadData = await uploadResponse.json()
+        try {
+          const uploadData = await uploadImage(imageFile)
           imageId = uploadData.id
+        } catch (err) {
+          // Image upload failed, continue without image
+          console.error('Failed to upload image:', err)
         }
       }
 
-      const response = await fetch(`/api/posts/${postId}/comments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          content: commentText,
-          image_id: imageId,
-        }),
+      const data = await createComment(postId, {
+        content: commentText,
+        image_id: imageId,
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to submit comment')
-      }
-
-      const data = await response.json()
 
       setOptimisticComments((prev) => prev.filter((c) => c.id !== optimisticComment.id))
       setComments((prev) =>

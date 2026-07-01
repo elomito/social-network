@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, use } from 'react'
 import GroupHeader from '../../../../components/features/groups/GroupHeader.js'
 import EventCard from '../../../../components/features/groups/EventCard'
 
@@ -11,7 +11,7 @@ async function fetchJSON(url) {
 }
 
 export default function GroupPage({ params }) {
-  const { groupId } = params
+  const { groupId } = use(params)
   const [group, setGroup] = useState(null)
   const [members, setMembers] = useState([])
   const [invitations, setInvitations] = useState([])

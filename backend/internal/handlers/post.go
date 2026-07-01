@@ -135,7 +135,9 @@ func GetPostHandler(db *sql.DB) http.HandlerFunc {
 		var groupID sql.NullString
 		var imagePath sql.NullString
 		var privacySetting string
-		var firstName, lastName, nickname string
+		var firstName, lastName sql.NullString
+		var nickname sql.NullString
+		var userReaction sql.NullString
 		var createdAt time.Time
 
 		err := db.QueryRowContext(r.Context(), `
@@ -149,7 +151,7 @@ func GetPostHandler(db *sql.DB) http.HandlerFunc {
 			WHERE p.id = ?
 		`, userIDStr, postID).Scan(
 			&post.ID, &post.AuthorID, &post.Content, &imagePath, &privacySetting, &groupID, &createdAt,
-			&firstName, &lastName, &nickname, &post.LikesCount, &post.CommentsCount, &post.UserReaction,
+			&firstName, &lastName, &nickname, &post.LikesCount, &post.CommentsCount, &userReaction,
 		)
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -160,10 +162,11 @@ func GetPostHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		authorName := firstName + " " + lastName
-		if nickname != "" {
-			authorName = nickname
+		authorName := firstName.String + " " + lastName.String
+		if nickname.String != "" {
+			authorName = nickname.String
 		}
+		post.UserReaction = userReaction.String
 		post.AuthorName = authorName
 		post.CreatedAt = createdAt.Format(time.RFC3339)
 
@@ -285,22 +288,25 @@ func GetPostsHandler(db *sql.DB) http.HandlerFunc {
 			var groupID sql.NullString
 			var imagePath sql.NullString
 			var privacySetting string
-			var firstName, lastName, nickname string
+			var firstName, lastName sql.NullString
+			var nickname sql.NullString
+			var userReaction sql.NullString
 			var createdAt time.Time
 
 			err := rows.Scan(
 				&post.ID, &post.AuthorID, &post.Content, &imagePath, &privacySetting, &groupID, &createdAt,
-				&firstName, &lastName, &nickname, &post.LikesCount, &post.CommentsCount, &post.UserReaction,
+				&firstName, &lastName, &nickname, &post.LikesCount, &post.CommentsCount, &userReaction,
 			)
 			if err != nil {
 				http.Error(w, "row scanning error: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 
-			authorName := firstName + " " + lastName
-			if nickname != "" {
-				authorName = nickname
+			authorName := firstName.String + " " + lastName.String
+			if nickname.String != "" {
+				authorName = nickname.String
 			}
+			post.UserReaction = userReaction.String
 			post.AuthorName = authorName
 			post.CreatedAt = createdAt.Format(time.RFC3339)
 

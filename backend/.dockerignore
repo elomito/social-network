@@ -1,0 +1,7 @@
+.git
+.gitignore
+*.log
+social_network.db
+__pycache__
+*.tmp
+*.swp
