@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import PostCard from '@/components/features/posts/PostCard'
 import PostComposer from '@/components/features/posts/PostComposer'
-import { getFeed } from '@/lib/apiClient'
+import { getFeed, getComments } from '@/lib/apiClient'
 
 export default function FeedPage() {
   const [posts, setPosts] = useState([])
@@ -12,6 +12,7 @@ export default function FeedPage() {
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const [error, setError] = useState('')
+  const [commentPreviews, setCommentPreviews] = useState({})
 
   const observer = useRef()
 
@@ -51,6 +52,22 @@ export default function FeedPage() {
         const fetchedPosts = data?.posts || data || []
         setPosts((prev) => (isInitialFetch ? fetchedPosts : [...prev, ...fetchedPosts]))
         setHasMore(fetchedPosts.length === 10)
+
+        // Fetch comment previews for each post
+        if (isInitialFetch) {
+          const previews = {}
+          for (const post of fetchedPosts) {
+            try {
+              const comments = await getComments(post.id)
+              previews[post.id] = comments || []
+            } catch (err) {
+              previews[post.id] = []
+            }
+          }
+          if (!cancelled) {
+            setCommentPreviews(previews)
+          }
+        }
       } catch (err) {
         if (!cancelled) setError(err?.response?.data?.message || 'Failed to load your feed.')
       } finally {
@@ -72,8 +89,8 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-6 px-4 py-6">
-      <div className="lg:col-span-2 space-y-6">
+    <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 py-6 lg:grid-cols-3">
+      <div className="space-y-6 lg:col-span-2">
         <PostComposer onPostCreated={handlePostCreated} />
 
         {error && (
@@ -104,48 +121,67 @@ export default function FeedPage() {
             </div>
           ) : (
             posts.map((post, index) => {
-                if (posts.length === index + 1) {
-                  return (
-                    <div ref={lastPostElementRef} key={post.id}>
-                      <PostCard
-                        post={post}
-                        onCommentAdded={(postId) => {
-                          setPosts((prev) =>
-                            prev.map((p) =>
-                              p.id === postId
-                                ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
-                                : p
-                            )
-                          )
-                        }}
-                      />
-                    </div>
-                  )
-                }
+              if (posts.length === index + 1) {
                 return (
-                  <PostCard
-                    key={post.id}
-                    post={post}
-                    onCommentAdded={(postId) => {
-                      setPosts((prev) =>
-                        prev.map((p) =>
-                          p.id === postId
-                            ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
-                            : p
+                  <div ref={lastPostElementRef} key={post.id}>
+                    <PostCard
+                      post={post}
+                      commentPreview={commentPreviews[post.id] || []}
+                      onCommentAdded={(postId, newComment) => {
+                        setPosts((prev) =>
+                          prev.map((p) =>
+                            p.id === postId
+                              ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
+                              : p
+                          )
                         )
-                      )
-                    }}
-                  />
+                        setCommentPreviews((prev) => ({
+                          ...prev,
+                          [postId]: [newComment, ...(prev[postId] || [])].slice(0, 3),
+                        }))
+                      }}
+                    />
+                  </div>
                 )
-              })
+              }
+              return (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  commentPreview={commentPreviews[post.id] || []}
+                  onCommentAdded={(postId, newComment) => {
+                    setPosts((prev) =>
+                      prev.map((p) =>
+                        p.id === postId ? { ...p, commentsCount: (p.commentsCount || 0) + 1 } : p
+                      )
+                    )
+                    setCommentPreviews((prev) => ({
+                      ...prev,
+                      [postId]: [newComment, ...(prev[postId] || [])].slice(0, 3),
+                    }))
+                  }}
+                />
+              )
+            })
           )}
 
           {loadingMore && (
             <div className="flex items-center justify-center py-4">
               <div className="flex items-center gap-2 text-sm text-indigo-600">
                 <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
                 </svg>
                 Loading more posts...
               </div>
@@ -154,13 +190,15 @@ export default function FeedPage() {
         </div>
       </div>
 
-      <div className="hidden lg:block space-y-6">
+      <div className="hidden space-y-6 lg:block">
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Requests</h3>
+          <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Requests
+          </h3>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-full bg-gray-200 shrink-0" />
+                <div className="h-9 w-9 shrink-0 rounded-full bg-gray-200" />
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Jordan Smith</p>
                   <p className="text-xxs text-gray-400">Follow Request</p>
@@ -168,10 +206,24 @@ export default function FeedPage() {
               </div>
               <div className="flex gap-1">
                 <button className="rounded-full bg-indigo-50 p-1 text-indigo-600 hover:bg-indigo-100">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2.5"
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
                 </button>
                 <button className="rounded-full bg-gray-50 p-1 text-gray-400 hover:bg-gray-100">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2.5"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
                 </button>
               </div>
             </div>
@@ -179,8 +231,10 @@ export default function FeedPage() {
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Active Now</h3>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Active Now
+            </h3>
             <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
               ● 12
             </span>
@@ -193,7 +247,7 @@ export default function FeedPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-gray-900">Elena Vance</p>
-                <p className="text-xxs text-indigo-600 animate-pulse">Typing...</p>
+                <p className="text-xxs animate-pulse text-indigo-600">Typing...</p>
               </div>
             </div>
           </div>
