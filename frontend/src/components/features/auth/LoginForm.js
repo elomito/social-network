@@ -3,19 +3,17 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/hooks/useAuth'
 
 export default function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
   const router = useRouter()
+  const { setToken } = useAuth()
 
-  function validateForm() {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  const validateForm = () => {
+    if (!email.includes('@')) {
       setError('Please enter a valid email address.')
       return false
     }
@@ -26,30 +24,40 @@ export default function LoginForm() {
     return true
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault()
+  const handleSubmit = async (e) => {
+    e.preventDefault()
     setError('')
 
     if (!validateForm()) return
     setLoading(true)
 
     try {
-      await login({ email, password })
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.message || 'Login failed')
+      }
+
+      // Set token to trigger auth state update
+      setToken('valid_session')
       router.push('/feed')
     } catch (err) {
-      setError(err?.response?.data?.message || 'Login failed. Please try again.')
+      setError(err.message)
     } finally {
       setLoading(false)
     }
   }
 
-
   return (
-    <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-md">
-      <h2 className="mb-6 text-center text-2xl font-bold text-gray-800">
-        Login to Social Network
-      </h2>
-
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
           {error}
