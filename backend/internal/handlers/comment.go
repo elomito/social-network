@@ -49,6 +49,12 @@ func GetCommentsHandler(db *sql.DB) http.HandlerFunc {
 		}
 		defer rows.Close()
 
+		// Check for query iteration errors
+		if err := rows.Err(); err != nil {
+			http.Error(w, "database query iteration error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		comments := []CommentResponse{}
 		for rows.Next() {
 			var comment CommentResponse
@@ -64,7 +70,7 @@ func GetCommentsHandler(db *sql.DB) http.HandlerFunc {
 				&firstName, &lastName, &nickname, &likesCount, &dislikesCount, &userReaction,
 			)
 			if err != nil {
-				http.Error(w, "row scanning error", http.StatusInternalServerError)
+				http.Error(w, "row scanning error: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 
