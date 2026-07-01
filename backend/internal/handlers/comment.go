@@ -60,7 +60,8 @@ func GetCommentsHandler(db *sql.DB) http.HandlerFunc {
 			var comment CommentResponse
 			var imagePath sql.NullString
 			var parentID sql.NullString
-			var firstName, lastName, nickname string
+			var firstName, lastName string
+			var nickname sql.NullString
 			var likesCount, dislikesCount int
 			var userReaction sql.NullString
 			var createdAt time.Time
@@ -75,8 +76,8 @@ func GetCommentsHandler(db *sql.DB) http.HandlerFunc {
 			}
 
 			authorName := firstName + " " + lastName
-			if nickname != "" {
-				authorName = nickname
+			if nickname.Valid && nickname.String != "" {
+				authorName = nickname.String
 			}
 			comment.AuthorName = authorName
 			comment.CreatedAt = createdAt.Format(time.RFC3339)
