@@ -5,8 +5,9 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import { getTokenFromCookie } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
+import { createComment, uploadImage } from '@/lib/apiClient'
 
-export default function PostCard({ post, onReactionChange }) {
+export default function PostCard({ post, onReactionChange, onCommentAdded }) {
   const {
     authorName = 'Anonymous User',
     authorAvatar,
@@ -23,6 +24,12 @@ export default function PostCard({ post, onReactionChange }) {
   const [optimisticLikes, setOptimisticLikes] = useState(likesCount)
   const [optimisticReaction, setOptimisticReaction] = useState(userReaction || null)
   const [reactionLoading, setReactionLoading] = useState(false)
+  const [showCommentForm, setShowCommentForm] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [commentImage, setCommentImage] = useState(null)
+  const [commentImagePreview, setCommentImagePreview] = useState('')
+  const [commentSubmitting, setCommentSubmitting] = useState(false)
+  const [commentError, setCommentError] = useState('')
 
   const formattedDate = createdAt
     ? new Date(createdAt).toLocaleDateString(undefined, {
@@ -77,6 +84,57 @@ export default function PostCard({ post, onReactionChange }) {
     } finally {
       setReactionLoading(false)
     }
+  }
+
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault()
+    if (!commentText.trim() && !commentImage) return
+
+    setCommentSubmitting(true)
+    setCommentError('')
+
+    try {
+      let imageUrl = null
+      if (commentImage) {
+        const uploadData = await uploadImage(commentImage)
+        imageUrl = uploadData.image_url
+      }
+
+      const data = await createComment(postId, {
+        content: commentText.trim(),
+        image_url: imageUrl,
+      })
+
+      setCommentText('')
+      setCommentImage(null)
+      setCommentImagePreview('')
+      setShowCommentForm(false)
+
+      if (onCommentAdded) {
+        onCommentAdded(postId, data)
+      }
+    } catch (err) {
+      setCommentError(err?.response?.data?.message || 'Failed to post comment')
+    } finally {
+      setCommentSubmitting(false)
+    }
+  }
+
+  const handleCommentImageChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setCommentImage(file)
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        setCommentImagePreview(event.target.result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const clearCommentImage = () => {
+    setCommentImage(null)
+    setCommentImagePreview('')
   }
 
   const privacyColors = {
@@ -144,15 +202,19 @@ export default function PostCard({ post, onReactionChange }) {
           <span>{optimisticLikes}</span>
         </button>
 
-        <Link
-          href={`/post/${postId}`}
-          className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 transition-all duration-200 hover:bg-gray-100 hover:text-blue-600"
+        <button
+          onClick={() => setShowCommentForm(!showCommentForm)}
+          className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
+            showCommentForm
+              ? 'bg-blue-50 text-blue-600'
+              : 'text-gray-500 hover:bg-gray-100 hover:text-blue-600'
+          }`}
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
           </svg>
           <span>{commentsCount}</span>
-        </Link>
+        </button>
 
         <button className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 transition-all duration-200 hover:bg-gray-100 hover:text-green-600">
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -161,6 +223,99 @@ export default function PostCard({ post, onReactionChange }) {
           <span>Share</span>
         </button>
       </div>
+
+      {/* Inline Comment Form */}
+      {showCommentForm && (
+        <div className="border-t border-gray-100 p-4">
+          <form onSubmit={handleCommentSubmit}>
+            <div className="flex gap-3">
+              <Avatar src={null} alt="You" fallback="U" size="md" />
+              <div className="flex-1">
+                <textarea
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Write a comment..."
+                  rows={3}
+                  className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-sm text-gray-900 placeholder-gray-400 transition-all duration-200 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  disabled={commentSubmitting}
+                />
+
+                {/* Image preview */}
+                {commentImagePreview && (
+                  <div className="relative mt-3">
+                    <img src={commentImagePreview} alt="Preview" className="max-h-48 rounded-xl object-cover" />
+                    <button
+                      type="button"
+                      onClick={clearCommentImage}
+                      className="absolute right-2 top-2 rounded-full bg-gray-900/60 p-1.5 text-white transition hover:bg-gray-900/80"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {commentError && (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                    {commentError}
+                  </div>
+                )}
+
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <label className="cursor-pointer rounded-lg p-2 text-gray-500 transition hover:bg-blue-50 hover:text-blue-600">
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                      </svg>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCommentImageChange}
+                        className="hidden"
+                        disabled={commentSubmitting}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCommentForm(false)
+                        setCommentText('')
+                        setCommentImage(null)
+                        setCommentImagePreview('')
+                        setCommentError('')
+                      }}
+                      className="rounded-xl px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={commentSubmitting || (!commentText.trim() && !commentImage)}
+                      className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/30 transition-all duration-200 hover:shadow-md hover:shadow-blue-500/40 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95"
+                    >
+                      {commentSubmitting ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Posting...
+                        </span>
+                      ) : (
+                        'Comment'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }
