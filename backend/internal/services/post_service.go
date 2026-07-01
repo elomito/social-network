@@ -25,11 +25,6 @@ type PostService interface {
 	GetReactions(ctx context.Context, postID uuid.UUID) ([]models.PostReaction, error)
 	GetUserReaction(ctx context.Context, userID, postID uuid.UUID) (*models.PostReaction, error)
 
-	// Comment management
-	AddComment(ctx context.Context, userID, postID uuid.UUID, req AddCommentRequest) (*models.Comment, error)
-	GetComments(ctx context.Context, postID uuid.UUID) ([]models.Comment, error)
-	DeleteComment(ctx context.Context, commentID, userID uuid.UUID) error
-
 	// Privacy and visibility
 	CheckPostVisibility(ctx context.Context, postID, viewerID uuid.UUID) (bool, error)
 	AddPostRecipient(ctx context.Context, postID, recipientID uuid.UUID) error
@@ -56,13 +51,6 @@ type UpdatePostRequest struct {
 	RecipientIDs []uuid.UUID `json:"recipient_ids,omitempty"`
 }
 
-// AddCommentRequest represents the input for adding a comment
-type AddCommentRequest struct {
-	Content  string     `json:"content" validate:"required,max=2000"`
-	ImageID  *uuid.UUID `json:"image_id,omitempty"`
-	ParentID *uuid.UUID `json:"parent_id,omitempty"`
-}
-
 // PostFilter represents filters for querying posts
 type PostFilter struct {
 	UserID  *uuid.UUID
@@ -81,13 +69,6 @@ type PostRepository interface {
 	GetRecipients(ctx context.Context, postID uuid.UUID) ([]models.PostRecipient, error)
 	GetFeedPosts(ctx context.Context, userIDs []uuid.UUID, limit, offset int) ([]models.Post, error)
 	GetGroupPosts(ctx context.Context, groupID uuid.UUID, limit, offset int) ([]models.Post, error)
-}
-
-type CommentRepository interface {
-	Create(ctx context.Context, comment *models.Comment) error
-	GetByID(ctx context.Context, commentID uuid.UUID) (*models.Comment, error)
-	GetByPostID(ctx context.Context, postID uuid.UUID) ([]models.Comment, error)
-	Update(ctx context.Context, comment *models.Comment) error
 }
 
 type ReactionRepository interface {
@@ -126,7 +107,6 @@ type WebSocketHub interface {
 // postService implements the PostService interface
 type postService struct {
 	postRepo     PostRepository
-	commentRepo  CommentRepository
 	reactionRepo ReactionRepository
 	userRepo     UserRepository
 	imageRepo    ImageRepository
@@ -137,7 +117,6 @@ type postService struct {
 // NewPostService creates a new post service instance
 func NewPostService(
 	postRepo PostRepository,
-	commentRepo CommentRepository,
 	reactionRepo ReactionRepository,
 	userRepo UserRepository,
 	imageRepo ImageRepository,
@@ -146,7 +125,6 @@ func NewPostService(
 ) PostService {
 	return &postService{
 		postRepo:     postRepo,
-		commentRepo:  commentRepo,
 		reactionRepo: reactionRepo,
 		userRepo:     userRepo,
 		imageRepo:    imageRepo,
@@ -381,72 +359,6 @@ func (s *postService) GetReactions(ctx context.Context, postID uuid.UUID) ([]mod
 // GetUserReaction retrieves the current user's reaction to a post
 func (s *postService) GetUserReaction(ctx context.Context, userID, postID uuid.UUID) (*models.PostReaction, error) {
 	return s.reactionRepo.GetPostReaction(ctx, userID, postID)
-}
-
-// AddComment adds a comment to a post
-func (s *postService) AddComment(ctx context.Context, userID, postID uuid.UUID, req AddCommentRequest) (*models.Comment, error) {
-	// Verify post exists and is visible
-	_, err := s.GetPost(ctx, postID, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// If parent comment is provided, verify it exists and belongs to the same post
-	if req.ParentID != nil {
-		parent, err := s.commentRepo.GetByID(ctx, *req.ParentID)
-		if err != nil {
-			return nil, errors.New("parent comment not found")
-		}
-		if parent.PostID != postID {
-			return nil, errors.New("parent comment does not belong to this post")
-		}
-	}
-
-	now := time.Now()
-	comment := &models.Comment{
-		ID:        uuid.New(),
-		UserID:    userID,
-		PostID:    postID,
-		ParentID:  req.ParentID,
-		Content:   req.Content,
-		ImageID:   req.ImageID,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	if err := s.commentRepo.Create(ctx, comment); err != nil {
-		return nil, err
-	}
-
-	return comment, nil
-}
-
-// GetComments retrieves comments for a post
-func (s *postService) GetComments(ctx context.Context, postID uuid.UUID) ([]models.Comment, error) {
-	return s.commentRepo.GetByPostID(ctx, postID)
-}
-
-// DeleteComment soft-deletes a comment
-func (s *postService) DeleteComment(ctx context.Context, commentID, userID uuid.UUID) error {
-	comment, err := s.commentRepo.GetByID(ctx, commentID)
-	if err != nil {
-		return errors.New("comment not found")
-	}
-
-	// Allow deletion by comment author or post author
-	post, err := s.postRepo.GetByID(ctx, comment.PostID)
-	if err != nil {
-		return err
-	}
-
-	if comment.UserID != userID && post.UserID != userID {
-		return errors.New("unauthorized")
-	}
-
-	now := time.Now()
-	comment.DeletedAt = &now
-
-	return s.commentRepo.Update(ctx, comment)
 }
 
 // CheckPostVisibility determines if a user can view a post
