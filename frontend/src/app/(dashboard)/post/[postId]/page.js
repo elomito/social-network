@@ -78,11 +78,11 @@ export default function PostDetailPage({ params }) {
     setGifUrl('')
 
     try {
-      let imageId = null
+      let imageUrl = null
       if (imageFile) {
         try {
           const uploadData = await uploadImage(imageFile)
-          imageId = uploadData.id
+          imageUrl = uploadData.image_url
         } catch (err) {
           // Image upload failed, continue without image
           console.error('Failed to upload image:', err)
@@ -91,7 +91,7 @@ export default function PostDetailPage({ params }) {
 
       const data = await createComment(postId, {
         content: commentText,
-        image_id: imageId,
+        image_url: imageUrl,
       })
 
       setOptimisticComments((prev) => prev.filter((c) => c.id !== optimisticComment.id))
