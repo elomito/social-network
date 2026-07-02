@@ -270,12 +270,13 @@ export default function PostDetailPage() {
       <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
         <div className="p-4">
           <h3 className="mb-4 text-sm font-semibold text-gray-900">
-            {comments.length} {comments.length === 1 ? 'Comment' : 'Comments'}
+            {post.commentsCount || comments.length} {post.commentsCount === 1 ? 'Comment' : 'Comments'}
           </h3>
           <CommentList
-            key={comments.length}
+            key={postId}
             comments={comments}
             postId={postId}
+            totalCount={post.commentsCount}
             onCommentAdded={handleCommentAdded}
           />
         </div>

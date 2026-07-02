@@ -1,11 +1,12 @@
 // src/components/features/posts/CommentList.js
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { getComments, createComment, addCommentReaction, removeCommentReaction } from '@/lib/apiClient'
 
-const COMMENTS_PER_PAGE = 10
+const INITIAL_DISPLAY_COUNT = 5
+const COMMENTS_PER_PAGE = 20
 
 function CommentItem({ comment, postId, depth = 0, onReplyAdded, onReactionChange }) {
   const [showReplyForm, setShowReplyForm] = useState(false)
@@ -258,43 +259,67 @@ function mergeComments(existingComments, newComments) {
   return [...existingComments, ...uniqueNewComments]
 }
 
-export default function CommentList({ comments: initialComments, postId, onCommentAdded, onReactionChange }) {
-  const [localComments, setLocalComments] = useState(() => buildCommentTree(initialComments || []))
-  const [flatComments, setFlatComments] = useState(initialComments || [])
+export default function CommentList({ comments: initialComments, postId, totalCount, onCommentAdded, onReactionChange }) {
+  const [allComments, setAllComments] = useState(() => initialComments || [])
+  const [isExpanded, setIsExpanded] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMoreComments, setHasMoreComments] = useState(true)
   const [loadError, setLoadError] = useState('')
 
-  const handleReplyAdded = useCallback((parentId, newReply) => {
-    setLocalComments((prev) => {
-      const addReplyToComment = (comments) => {
-        return comments.map((comment) => {
-          if (comment.id === parentId) {
-            return {
-              ...comment,
-              replies: [...(comment.replies || []), newReply],
-            }
-          }
-          if (comment.replies && comment.replies.length > 0) {
-            return {
-              ...comment,
-              replies: addReplyToComment(comment.replies),
-            }
-          }
-          return comment
-        })
-      }
-      return addReplyToComment(prev)
-    })
+  // Track previous postId to detect post changes
+  const prevPostIdRef = useRef(postId)
 
-    // Also update flat comments list
-    setFlatComments((prev) => {
+  // Sync with initialComments prop changes - only reset when postId changes
+  useEffect(() => {
+    if (prevPostIdRef.current !== postId) {
+      // Post changed, reset all state
+      setAllComments(initialComments || [])
+      setIsExpanded(false)
+      setHasMoreComments(true)
+      setLoadError('')
+      prevPostIdRef.current = postId
+    } else {
+      // Same post, just merge any new comments without resetting expand state
+      setAllComments((prev) => {
+        const newComments = (initialComments || []).filter((c) => !prev.some((pc) => pc.id === c.id))
+        if (newComments.length > 0) {
+          return mergeComments(prev, newComments)
+        }
+        return prev
+      })
+    }
+  }, [initialComments, postId])
+
+  // Determine total count: use prop if provided, otherwise use loaded count
+  const effectiveTotalCount = totalCount != null ? totalCount : allComments.length
+
+  // Rebuild tree whenever allComments change
+  const commentTree = useMemo(() => buildCommentTree(allComments), [allComments])
+
+  // Determine if we should show "View More" button
+  const showViewMore = !isExpanded && allComments.length < effectiveTotalCount
+
+  // Determine if we should show "Show Less" button
+  const showShowLess = isExpanded && effectiveTotalCount > INITIAL_DISPLAY_COUNT
+
+  const handleReplyAdded = useCallback((parentId, newReply) => {
+    setAllComments((prev) => {
       if (prev.some((c) => c.id === newReply.id)) return prev
       return [...prev, newReply]
     })
 
     if (onCommentAdded) {
       onCommentAdded(newReply)
+    }
+  }, [onCommentAdded])
+
+  const handleCommentAdded = useCallback((newComment) => {
+    setAllComments((prev) => {
+      if (prev.some((c) => c.id === newComment.id)) return prev
+      return [newComment, ...prev]
+    })
+    if (onCommentAdded) {
+      onCommentAdded(newComment)
     }
   }, [onCommentAdded])
 
@@ -305,7 +330,7 @@ export default function CommentList({ comments: initialComments, postId, onComme
     setLoadError('')
 
     try {
-      const offset = flatComments.length
+      const offset = allComments.length
       const newComments = await getComments(postId, { limit: COMMENTS_PER_PAGE, offset })
 
       if (!newComments || newComments.length === 0) {
@@ -314,7 +339,7 @@ export default function CommentList({ comments: initialComments, postId, onComme
       }
 
       // Merge new comments with existing, avoiding duplicates
-      setFlatComments((prev) => mergeComments(prev, newComments))
+      setAllComments((prev) => mergeComments(prev, newComments))
 
       // If we got fewer comments than requested, there are no more
       if (newComments.length < COMMENTS_PER_PAGE) {
@@ -325,20 +350,28 @@ export default function CommentList({ comments: initialComments, postId, onComme
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMoreComments, flatComments.length, postId])
+  }, [loadingMore, hasMoreComments, allComments.length, postId])
 
-  // Rebuild tree whenever flat comments change
-  const commentTree = useMemo(() => buildCommentTree(flatComments), [flatComments])
-
-  const handleCommentAdded = useCallback((newComment) => {
-    setFlatComments((prev) => {
-      if (prev.some((c) => c.id === newComment.id)) return prev
-      return [...prev, newComment]
-    })
-    if (onCommentAdded) {
-      onCommentAdded(newComment)
+  const handleViewMore = async () => {
+    // If we haven't loaded all comments yet, fetch them first
+    if (allComments.length < effectiveTotalCount) {
+      await loadMoreComments()
     }
-  }, [onCommentAdded])
+    setIsExpanded(true)
+  }
+
+  const handleShowLess = () => {
+    setIsExpanded(false)
+  }
+
+  // Get visible comments based on expanded state
+  const visibleComments = useMemo(() => {
+    if (isExpanded) {
+      return commentTree
+    }
+    // Show only first INITIAL_DISPLAY_COUNT root comments
+    return commentTree.slice(0, INITIAL_DISPLAY_COUNT)
+  }, [isExpanded, commentTree])
 
   if (!commentTree || commentTree.length === 0) {
     return (
@@ -350,7 +383,7 @@ export default function CommentList({ comments: initialComments, postId, onComme
 
   return (
     <div className="space-y-6">
-      {commentTree.map((comment) => (
+      {visibleComments.map((comment) => (
         <CommentItem
           key={comment.id}
           comment={comment}
@@ -361,10 +394,11 @@ export default function CommentList({ comments: initialComments, postId, onComme
         />
       ))}
 
-      {hasMoreComments && (
-        <div className="text-center pt-4">
+      {/* View More / Show Less Buttons */}
+      <div className="text-center pt-4">
+        {showViewMore && (
           <button
-            onClick={loadMoreComments}
+            onClick={handleViewMore}
             disabled={loadingMore}
             className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-blue-600 transition-all duration-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -380,11 +414,21 @@ export default function CommentList({ comments: initialComments, postId, onComme
               'View More Comments'
             )}
           </button>
-          {loadError && (
-            <p className="mt-2 text-sm text-red-600">{loadError}</p>
-          )}
-        </div>
-      )}
+        )}
+
+        {showShowLess && (
+          <button
+            onClick={handleShowLess}
+            className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-gray-600 transition-all duration-200 hover:bg-gray-100 hover:text-gray-700"
+          >
+            Show Less
+          </button>
+        )}
+
+        {loadError && (
+          <p className="mt-2 text-sm text-red-600">{loadError}</p>
+        )}
+      </div>
     </div>
   )
 }

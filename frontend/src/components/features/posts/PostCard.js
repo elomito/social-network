@@ -5,10 +5,8 @@ import React, { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { getTokenFromCookie } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
-import { createComment, uploadImage, getComments } from '@/lib/apiClient'
+import { createComment, uploadImage } from '@/lib/apiClient'
 import CommentList from '@/components/features/posts/CommentList'
-
-const COMMENTS_PER_PAGE = 10
 
 export default function PostCard({ post, onReactionChange, onCommentAdded, commentPreview }) {
   const {
@@ -34,11 +32,6 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
   const [commentSubmitting, setCommentSubmitting] = useState(false)
   const [commentError, setCommentError] = useState('')
   const [showAllComments, setShowAllComments] = useState(false)
-  const [allComments, setAllComments] = useState([])
-  const [loadingMoreComments, setLoadingMoreComments] = useState(false)
-  const [loadingInitialComments, setLoadingInitialComments] = useState(false)
-  const [hasMoreComments, setHasMoreComments] = useState(true)
-  const [commentsOffset, setCommentsOffset] = useState(0)
 
   const formattedDate = createdAt
     ? new Date(createdAt).toLocaleDateString(undefined, {
@@ -122,11 +115,6 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
       if (onCommentAdded) {
         onCommentAdded(postId, data)
       }
-
-      // If all comments are shown, add the new comment to the list
-      if (showAllComments) {
-        setAllComments((prev) => [data, ...prev])
-      }
     } catch (err) {
       setCommentError(err?.response?.data?.message || 'Failed to post comment')
     } finally {
@@ -151,68 +139,11 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
     setCommentImagePreview('')
   }
 
-  const loadMoreComments = useCallback(async () => {
-    if (loadingMoreComments || !hasMoreComments) return
-
-    setLoadingMoreComments(true)
-    try {
-      const newComments = await getComments(postId, { limit: COMMENTS_PER_PAGE, offset: commentsOffset })
-      if (!newComments || newComments.length === 0) {
-        setHasMoreComments(false)
-        return
-      }
-      setAllComments((prev) => {
-        const existingIds = new Set(prev.map((c) => c.id))
-        const uniqueNew = newComments.filter((c) => !existingIds.has(c.id))
-        return [...prev, ...uniqueNew]
-      })
-      setCommentsOffset((prev) => prev + COMMENTS_PER_PAGE)
-      if (newComments.length < COMMENTS_PER_PAGE) {
-        setHasMoreComments(false)
-      }
-    } catch (err) {
-      console.error('Failed to load more comments:', err)
-    } finally {
-      setLoadingMoreComments(false)
-    }
-  }, [loadingMoreComments, hasMoreComments, commentsOffset, postId])
-
-  const handleShowAllComments = useCallback(async () => {
-    if (showAllComments) {
-      setShowAllComments(false)
-      setAllComments([])
-      setCommentsOffset(0)
-      setHasMoreComments(true)
-      return
-    }
-
-    setShowAllComments(true)
-    setLoadingInitialComments(true)
-    try {
-      const comments = await getComments(postId, { limit: COMMENTS_PER_PAGE, offset: 0 })
-      setAllComments(comments || [])
-      setCommentsOffset(COMMENTS_PER_PAGE)
-      if (!comments || comments.length < COMMENTS_PER_PAGE) {
-        setHasMoreComments(false)
-      } else {
-        setHasMoreComments(true)
-      }
-    } catch (err) {
-      console.error('Failed to load comments:', err)
-      setHasMoreComments(false)
-    } finally {
-      setLoadingInitialComments(false)
-    }
-  }, [showAllComments, postId])
-
   const handleCommentAdded = useCallback((newComment) => {
     if (onCommentAdded) {
       onCommentAdded(postId, newComment)
     }
-    if (showAllComments) {
-      setAllComments((prev) => [newComment, ...prev])
-    }
-  }, [onCommentAdded, postId, showAllComments])
+  }, [onCommentAdded, postId])
 
   const privacyColors = {
     public: 'bg-green-100 text-green-700',
@@ -347,62 +278,24 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
             ))}
             {commentsCount > 3 && (
               <button
-                onClick={handleShowAllComments}
+                onClick={() => setShowAllComments(true)}
                 className="w-full text-left text-sm font-medium text-blue-600 hover:text-blue-700 py-2"
               >
-                View all {commentsCount} comments
+                View More Comments
               </button>
             )}
           </div>
         )}
 
-        {/* Loading Initial Comments */}
-        {showAllComments && loadingInitialComments && (
-          <div className="px-4 py-6 text-center">
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Loading comments...
-            </div>
-          </div>
-        )}
-
         {/* Expanded Comments List */}
-        {showAllComments && !loadingInitialComments && (
-          <div className="px-4 py-3 space-y-4">
+        {showAllComments && (
+          <div className="px-4 py-3">
             <CommentList
-              comments={allComments}
+              comments={commentPreview}
               postId={postId}
+              totalCount={commentsCount}
               onCommentAdded={handleCommentAdded}
             />
-            {hasMoreComments && (
-              <div className="text-center pt-2">
-                <button
-                  onClick={loadMoreComments}
-                  disabled={loadingMoreComments}
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-blue-600 transition-all duration-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {loadingMoreComments ? (
-                    <>
-                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Loading more comments...
-                    </>
-                  ) : (
-                    'View More Comments'
-                  )}
-                </button>
-              </div>
-            )}
-            {!hasMoreComments && allComments.length > 0 && (
-              <div className="text-center pt-2 text-sm text-gray-500">
-                No more comments
-              </div>
-            )}
           </div>
         )}
       </div>

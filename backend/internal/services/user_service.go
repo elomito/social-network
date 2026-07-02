@@ -8,13 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"backend/internal/models"
+
+	"github.com/google/uuid"
 )
 
-var (
-	ErrUserNotFound = errors.New("user not found")
-)
+var ErrUserNotFound = errors.New("user not found")
 
 // UpdateProfilePayload contains fields that may be updated on a user profile.
 // Pointer fields are used so we can tell which values were provided.
@@ -40,10 +39,10 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (models.User, e
 	var u models.User
 	var (
 		idStr, email, passwordHash, firstName, lastName string
-		nickname, dobStr, avatarImageID, aboutMe          sql.NullString
-		isPublicInt                                      sql.NullInt64
-		createdAtStr, updatedAtStr, lastActiveStr        sql.NullString
-		deletedAtStr                                      sql.NullString
+		nickname, dobStr, avatarImageID, aboutMe        sql.NullString
+		isPublicInt                                     sql.NullInt64
+		createdAtStr, updatedAtStr, lastActiveStr       sql.NullString
+		deletedAtStr                                    sql.NullString
 	)
 
 	query := `SELECT id, email, password_hash, first_name, last_name, nickname, date_of_birth, avatar_image_id, about_me, is_public, created_at, updated_at, last_active_at, deleted_at FROM users WHERE id = ? LIMIT 1`
@@ -110,6 +109,54 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (models.User, e
 	return u, nil
 }
 
+// GetFollowRelationship returns the follow relationship between two users
+func (s *UserService) GetFollowRelationship(ctx context.Context, userID, targetID uuid.UUID) (*models.Follow, error) {
+	var follow models.Follow
+	err := s.db.QueryRowContext(ctx, `
+		SELECT follower_id, following_id, created_at
+		FROM follows
+		WHERE follower_id = ? AND following_id = ?
+	`, userID.String(), targetID.String()).Scan(
+		&follow.FollowerID,
+		&follow.FollowingID,
+		&follow.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &follow, nil
+}
+
+// GetFollowing returns all users that the given user is following
+func (s *UserService) GetFollowing(ctx context.Context, userID uuid.UUID) ([]models.Follow, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT follower_id, following_id, created_at
+		FROM follows
+		WHERE follower_id = ?
+	`, userID.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var following []models.Follow
+	for rows.Next() {
+		var follow models.Follow
+		if err := rows.Scan(
+			&follow.FollowerID,
+			&follow.FollowingID,
+			&follow.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		following = append(following, follow)
+	}
+	return following, nil
+}
+
 // UpdateProfile updates provided fields on the user's profile
 func (s *UserService) UpdateProfile(ctx context.Context, id uuid.UUID, p UpdateProfilePayload) error {
 	sets := make([]string, 0)
@@ -141,7 +188,11 @@ func (s *UserService) UpdateProfile(ctx context.Context, id uuid.UUID, p UpdateP
 	}
 	if p.IsPublic != nil {
 		sets = append(sets, "is_public = ?")
-		if *p.IsPublic { args = append(args, 1) } else { args = append(args, 0) }
+		if *p.IsPublic {
+			args = append(args, 1)
+		} else {
+			args = append(args, 0)
+		}
 	}
 
 	if len(sets) == 0 {

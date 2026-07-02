@@ -59,6 +59,7 @@ var legacySchemaColumns = []schemaColumn{
 	{table: "posts", name: "created_at", definition: "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
 	{table: "posts", name: "updated_at", definition: "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"},
 	{table: "posts", name: "group_id", definition: "group_id TEXT"},
+	{table: "posts", name: "deleted_at", definition: "deleted_at TEXT"},
 
 	{table: "comments", name: "post_id", definition: "post_id TEXT NOT NULL"},
 	{table: "comments", name: "author_id", definition: "author_id TEXT NOT NULL"},
