@@ -295,6 +295,7 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
               postId={postId}
               totalCount={commentsCount}
               onCommentAdded={handleCommentAdded}
+              initiallyExpanded={true}
             />
           </div>
         )}
