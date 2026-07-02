@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"backend/internal/models"
+	"backend/internal/repository"
+	"backend/internal/websocket"
 
 	"github.com/google/uuid"
 )
@@ -13,10 +15,10 @@ import (
 // PostService defines the interface for post-related business logic
 type PostService interface {
 	// Core CRUD operations
-	CreatePost(ctx context.Context, userID uuid.UUID, req CreatePostRequest) (*models.Post, error)
-	GetPost(ctx context.Context, postID, viewerID uuid.UUID) (*models.Post, error)
-	GetPosts(ctx context.Context, filter PostFilter) ([]models.Post, error)
-	UpdatePost(ctx context.Context, postID, userID uuid.UUID, req UpdatePostRequest) (*models.Post, error)
+	CreatePost(ctx context.Context, userID uuid.UUID, req CreatePostRequest) (*models.PostResponse, error)
+	GetPost(ctx context.Context, postID, viewerID uuid.UUID) (*models.PostResponse, error)
+	GetPosts(ctx context.Context, viewerID uuid.UUID, filter PostFilter) ([]models.PostResponse, error)
+	UpdatePost(ctx context.Context, postID, userID uuid.UUID, req UpdatePostRequest) (*models.PostResponse, error)
 	DeletePost(ctx context.Context, postID, userID uuid.UUID) error
 
 	// Reaction management
@@ -24,11 +26,6 @@ type PostService interface {
 	RemoveReaction(ctx context.Context, userID, postID uuid.UUID) error
 	GetReactions(ctx context.Context, postID uuid.UUID) ([]models.PostReaction, error)
 	GetUserReaction(ctx context.Context, userID, postID uuid.UUID) (*models.PostReaction, error)
-
-	// Comment management
-	AddComment(ctx context.Context, userID, postID uuid.UUID, req AddCommentRequest) (*models.Comment, error)
-	GetComments(ctx context.Context, postID uuid.UUID) ([]models.Comment, error)
-	DeleteComment(ctx context.Context, commentID, userID uuid.UUID) error
 
 	// Privacy and visibility
 	CheckPostVisibility(ctx context.Context, postID, viewerID uuid.UUID) (bool, error)
@@ -38,12 +35,13 @@ type PostService interface {
 	// Feed generation
 	GetUserFeed(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Post, error)
 	GetGroupPosts(ctx context.Context, groupID, viewerID uuid.UUID, limit, offset int) ([]models.Post, error)
+	GetProfilePosts(ctx context.Context, userID, viewerID uuid.UUID, limit, offset int) ([]models.Post, error)
 }
 
 // CreatePostRequest represents the input for creating a new post
 type CreatePostRequest struct {
 	Content      string      `json:"content" validate:"required,max=5000"`
-	ImageID      *uuid.UUID  `json:"image_id,omitempty"`
+	ImageURL     string      `json:"image_url"`
 	PrivacyLevel string      `json:"privacy_level" validate:"required,oneof=public friends private group"`
 	RecipientIDs []uuid.UUID `json:"recipient_ids,omitempty"`
 }
@@ -51,16 +49,9 @@ type CreatePostRequest struct {
 // UpdatePostRequest represents the input for updating an existing post
 type UpdatePostRequest struct {
 	Content      *string     `json:"content,omitempty" validate:"omitempty,max=5000"`
-	ImageID      *uuid.UUID  `json:"image_id,omitempty"`
+	ImageURL     *string     `json:"image_url,omitempty"`
 	PrivacyLevel *string     `json:"privacy_level,omitempty" validate:"omitempty,oneof=public friends private group"`
 	RecipientIDs []uuid.UUID `json:"recipient_ids,omitempty"`
-}
-
-// AddCommentRequest represents the input for adding a comment
-type AddCommentRequest struct {
-	Content  string     `json:"content" validate:"required,max=2000"`
-	ImageID  *uuid.UUID `json:"image_id,omitempty"`
-	ParentID *uuid.UUID `json:"parent_id,omitempty"`
 }
 
 // PostFilter represents filters for querying posts
@@ -71,82 +62,27 @@ type PostFilter struct {
 	Offset  int
 }
 
-// Repository interfaces for dependency injection
-type PostRepository interface {
-	Create(ctx context.Context, post *models.Post) error
-	GetByID(ctx context.Context, postID uuid.UUID) (*models.Post, error)
-	GetMany(ctx context.Context, filter PostFilter) ([]models.Post, error)
-	Update(ctx context.Context, post *models.Post) error
-	AddRecipient(ctx context.Context, recipient *models.PostRecipient) error
-	GetRecipients(ctx context.Context, postID uuid.UUID) ([]models.PostRecipient, error)
-	GetFeedPosts(ctx context.Context, userIDs []uuid.UUID, limit, offset int) ([]models.Post, error)
-	GetGroupPosts(ctx context.Context, groupID uuid.UUID, limit, offset int) ([]models.Post, error)
-}
-
-type CommentRepository interface {
-	Create(ctx context.Context, comment *models.Comment) error
-	GetByID(ctx context.Context, commentID uuid.UUID) (*models.Comment, error)
-	GetByPostID(ctx context.Context, postID uuid.UUID) ([]models.Comment, error)
-	Update(ctx context.Context, comment *models.Comment) error
-}
-
-type ReactionRepository interface {
-	CreatePostReaction(ctx context.Context, reaction *models.PostReaction) error
-	GetPostReaction(ctx context.Context, userID, postID uuid.UUID) (*models.PostReaction, error)
-	UpdatePostReaction(ctx context.Context, reaction *models.PostReaction) error
-	DeletePostReaction(ctx context.Context, userID, postID uuid.UUID) error
-	GetPostReactions(ctx context.Context, postID uuid.UUID) ([]models.PostReaction, error)
-}
-
-type UserRepository interface {
-	GetByID(ctx context.Context, userID uuid.UUID) (*models.User, error)
-	GetFollowRelationship(ctx context.Context, userID, targetID uuid.UUID) (*models.Follow, error)
-	GetFollowing(ctx context.Context, userID uuid.UUID) ([]models.Follow, error)
-}
-
-type ImageRepository interface {
-	GetByID(ctx context.Context, imageID uuid.UUID) (*models.Image, error)
-}
-
-type GroupRepository interface {
-	IsMember(ctx context.Context, groupID, userID uuid.UUID) (bool, error)
-}
-
-// WebSocketMessage represents a message to be published
-type WebSocketMessage struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
-}
-
-// WebSocketHub defines the interface for publishing websocket messages
-type WebSocketHub interface {
-	Publish(msg WebSocketMessage)
-}
-
 // postService implements the PostService interface
 type postService struct {
-	postRepo     PostRepository
-	commentRepo  CommentRepository
-	reactionRepo ReactionRepository
-	userRepo     UserRepository
-	imageRepo    ImageRepository
-	groupRepo    GroupRepository
-	websocketHub WebSocketHub
+	postRepo     repository.PostRepository
+	reactionRepo repository.ReactionRepository
+	userRepo     repository.UserRepository
+	imageRepo    repository.ImageRepository
+	groupRepo    repository.GroupRepository
+	websocketHub websocket.WebSocketHub
 }
 
 // NewPostService creates a new post service instance
 func NewPostService(
-	postRepo PostRepository,
-	commentRepo CommentRepository,
-	reactionRepo ReactionRepository,
-	userRepo UserRepository,
-	imageRepo ImageRepository,
-	groupRepo GroupRepository,
-	websocketHub WebSocketHub,
+	postRepo repository.PostRepository,
+	reactionRepo repository.ReactionRepository,
+	userRepo repository.UserRepository,
+	imageRepo repository.ImageRepository,
+	groupRepo repository.GroupRepository,
+	websocketHub websocket.WebSocketHub,
 ) PostService {
 	return &postService{
 		postRepo:     postRepo,
-		commentRepo:  commentRepo,
 		reactionRepo: reactionRepo,
 		userRepo:     userRepo,
 		imageRepo:    imageRepo,
@@ -156,7 +92,7 @@ func NewPostService(
 }
 
 // CreatePost creates a new post with business rule validation
-func (s *postService) CreatePost(ctx context.Context, userID uuid.UUID, req CreatePostRequest) (*models.Post, error) {
+func (s *postService) CreatePost(ctx context.Context, userID uuid.UUID, req CreatePostRequest) (*models.PostResponse, error) {
 	// Validate privacy level
 	validPrivacy := map[string]bool{"public": true, "friends": true, "private": true, "group": true}
 	if !validPrivacy[req.PrivacyLevel] {
@@ -174,20 +110,17 @@ func (s *postService) CreatePost(ctx context.Context, userID uuid.UUID, req Crea
 		// For now, this is a placeholder for group membership validation
 	}
 
-	// If image is provided, verify it exists and belongs to the user
-	if req.ImageID != nil {
-		_, err := s.imageRepo.GetByID(ctx, *req.ImageID)
-		if err != nil {
-			return nil, errors.New("invalid image")
-		}
+	now := time.Now()
+	var imagePath *string
+	if req.ImageURL != "" {
+		imagePath = &req.ImageURL
 	}
 
-	now := time.Now()
 	post := &models.Post{
 		ID:           uuid.New(),
 		UserID:       userID,
 		Content:      req.Content,
-		ImageID:      req.ImageID,
+		ImagePath:    imagePath,
 		PrivacyLevel: req.PrivacyLevel,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -214,16 +147,30 @@ func (s *postService) CreatePost(ctx context.Context, userID uuid.UUID, req Crea
 	}
 
 	// Publish event for real-time updates
-	s.websocketHub.Publish(WebSocketMessage{
+	s.websocketHub.Publish(websocket.WebSocketMessage{
 		Type: "post_created",
 		Data: post,
 	})
 
-	return post, nil
+	// Build response
+	resp := &models.PostResponse{
+		ID:            post.ID.String(),
+		AuthorID:      post.UserID.String(),
+		CreatedAt:     post.CreatedAt.Format(time.RFC3339),
+		Content:       post.Content,
+		Privacy:       req.PrivacyLevel,
+		LikesCount:    0,
+		CommentsCount: 0,
+	}
+	if post.ImagePath != nil {
+		resp.ImageUrl = *post.ImagePath
+	}
+
+	return resp, nil
 }
 
-// GetPost retrieves a single post with visibility checks
-func (s *postService) GetPost(ctx context.Context, postID, viewerID uuid.UUID) (*models.Post, error) {
+// GetPost retrieves a single post with visibility checks and enrichment
+func (s *postService) GetPost(ctx context.Context, postID, viewerID uuid.UUID) (*models.PostResponse, error) {
 	post, err := s.postRepo.GetByID(ctx, postID)
 	if err != nil {
 		return nil, errors.New("post not found")
@@ -243,11 +190,11 @@ func (s *postService) GetPost(ctx context.Context, postID, viewerID uuid.UUID) (
 		return nil, errors.New("forbidden")
 	}
 
-	return post, nil
+	return s.enrichPost(ctx, *post, viewerID)
 }
 
 // GetPosts retrieves multiple posts with filtering and pagination
-func (s *postService) GetPosts(ctx context.Context, filter PostFilter) ([]models.Post, error) {
+func (s *postService) GetPosts(ctx context.Context, viewerID uuid.UUID, filter PostFilter) ([]models.PostResponse, error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 20 // default limit
 	}
@@ -255,16 +202,38 @@ func (s *postService) GetPosts(ctx context.Context, filter PostFilter) ([]models
 		filter.Limit = 100 // max limit
 	}
 
-	posts, err := s.postRepo.GetMany(ctx, filter)
+	var posts []models.Post
+	var err error
+
+	if filter.GroupID != nil {
+		posts, err = s.postRepo.GetGroupPosts(ctx, *filter.GroupID, filter.Limit, filter.Offset)
+	} else if filter.UserID != nil {
+		posts, err = s.postRepo.GetProfilePosts(ctx, *filter.UserID, viewerID, filter.Limit, filter.Offset)
+	} else {
+		posts, err = s.GetUserFeed(ctx, viewerID, filter.Limit, filter.Offset)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	return posts, nil
+	var responses []models.PostResponse
+	for _, post := range posts {
+		if post.DeletedAt != nil {
+			continue
+		}
+		resp, err := s.enrichPost(ctx, post, viewerID)
+		if err != nil {
+			return nil, err
+		}
+		responses = append(responses, *resp)
+	}
+
+	return responses, nil
 }
 
 // UpdatePost updates an existing post with validation
-func (s *postService) UpdatePost(ctx context.Context, postID, userID uuid.UUID, req UpdatePostRequest) (*models.Post, error) {
+func (s *postService) UpdatePost(ctx context.Context, postID, userID uuid.UUID, req UpdatePostRequest) (*models.PostResponse, error) {
 	post, err := s.postRepo.GetByID(ctx, postID)
 	if err != nil {
 		return nil, errors.New("post not found")
@@ -279,13 +248,9 @@ func (s *postService) UpdatePost(ctx context.Context, postID, userID uuid.UUID, 
 	if req.Content != nil {
 		post.Content = *req.Content
 	}
-	if req.ImageID != nil {
-		// Verify image exists and belongs to user
-		_, err := s.imageRepo.GetByID(ctx, *req.ImageID)
-		if err != nil {
-			return nil, errors.New("invalid image")
-		}
-		post.ImageID = req.ImageID
+	if req.ImageURL != nil {
+		imagePath := *req.ImageURL
+		post.ImagePath = &imagePath
 	}
 	if req.PrivacyLevel != nil {
 		validPrivacy := map[string]bool{"public": true, "friends": true, "private": true, "group": true}
@@ -302,12 +267,12 @@ func (s *postService) UpdatePost(ctx context.Context, postID, userID uuid.UUID, 
 	}
 
 	// Publish event for real-time updates
-	s.websocketHub.Publish(WebSocketMessage{
+	s.websocketHub.Publish(websocket.WebSocketMessage{
 		Type: "post_updated",
 		Data: post,
 	})
 
-	return post, nil
+	return s.enrichPost(ctx, *post, userID)
 }
 
 // DeletePost soft-deletes a post
@@ -330,7 +295,7 @@ func (s *postService) DeletePost(ctx context.Context, postID, userID uuid.UUID) 
 	}
 
 	// Publish event for real-time updates
-	s.websocketHub.Publish(WebSocketMessage{
+	s.websocketHub.Publish(websocket.WebSocketMessage{
 		Type: "post_deleted",
 		Data: map[string]uuid.UUID{"post_id": postID},
 	})
@@ -381,72 +346,6 @@ func (s *postService) GetReactions(ctx context.Context, postID uuid.UUID) ([]mod
 // GetUserReaction retrieves the current user's reaction to a post
 func (s *postService) GetUserReaction(ctx context.Context, userID, postID uuid.UUID) (*models.PostReaction, error) {
 	return s.reactionRepo.GetPostReaction(ctx, userID, postID)
-}
-
-// AddComment adds a comment to a post
-func (s *postService) AddComment(ctx context.Context, userID, postID uuid.UUID, req AddCommentRequest) (*models.Comment, error) {
-	// Verify post exists and is visible
-	_, err := s.GetPost(ctx, postID, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// If parent comment is provided, verify it exists and belongs to the same post
-	if req.ParentID != nil {
-		parent, err := s.commentRepo.GetByID(ctx, *req.ParentID)
-		if err != nil {
-			return nil, errors.New("parent comment not found")
-		}
-		if parent.PostID != postID {
-			return nil, errors.New("parent comment does not belong to this post")
-		}
-	}
-
-	now := time.Now()
-	comment := &models.Comment{
-		ID:        uuid.New(),
-		UserID:    userID,
-		PostID:    postID,
-		ParentID:  req.ParentID,
-		Content:   req.Content,
-		ImageID:   req.ImageID,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	if err := s.commentRepo.Create(ctx, comment); err != nil {
-		return nil, err
-	}
-
-	return comment, nil
-}
-
-// GetComments retrieves comments for a post
-func (s *postService) GetComments(ctx context.Context, postID uuid.UUID) ([]models.Comment, error) {
-	return s.commentRepo.GetByPostID(ctx, postID)
-}
-
-// DeleteComment soft-deletes a comment
-func (s *postService) DeleteComment(ctx context.Context, commentID, userID uuid.UUID) error {
-	comment, err := s.commentRepo.GetByID(ctx, commentID)
-	if err != nil {
-		return errors.New("comment not found")
-	}
-
-	// Allow deletion by comment author or post author
-	post, err := s.postRepo.GetByID(ctx, comment.PostID)
-	if err != nil {
-		return err
-	}
-
-	if comment.UserID != userID && post.UserID != userID {
-		return errors.New("unauthorized")
-	}
-
-	now := time.Now()
-	comment.DeletedAt = &now
-
-	return s.commentRepo.Update(ctx, comment)
 }
 
 // CheckPostVisibility determines if a user can view a post
@@ -522,7 +421,7 @@ func (s *postService) GetPostRecipients(ctx context.Context, postID uuid.UUID) (
 		if err != nil {
 			continue
 		}
-		users = append(users, *user)
+		users = append(users, user)
 	}
 
 	return users, nil
@@ -584,4 +483,80 @@ func (s *postService) GetGroupPosts(ctx context.Context, groupID, viewerID uuid.
 	}
 
 	return posts, nil
+}
+
+// GetProfilePosts retrieves posts for a specific user profile
+func (s *postService) GetProfilePosts(ctx context.Context, userID, viewerID uuid.UUID, limit, offset int) ([]models.Post, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	return s.postRepo.GetProfilePosts(ctx, userID, viewerID, limit, offset)
+}
+
+// enrichPost enriches a post with author info, counts, and user reaction
+func (s *postService) enrichPost(ctx context.Context, post models.Post, viewerID uuid.UUID) (*models.PostResponse, error) {
+	author, err := s.userRepo.GetByID(ctx, post.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	authorName := author.FirstName + " " + author.LastName
+	if author.Nickname != nil && *author.Nickname != "" {
+		authorName = *author.Nickname
+	}
+
+	likesCount, err := s.postRepo.CountLikes(ctx, post.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	commentsCount, err := s.postRepo.CountComments(ctx, post.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	reaction, err := s.reactionRepo.GetPostReaction(ctx, viewerID, post.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var userReaction string
+	if reaction != nil {
+		userReaction = string(reaction.ReactionType)
+	}
+
+	privacy := "public"
+	if post.PrivacyLevel == "almost_private" {
+		privacy = "friends"
+	} else if post.PrivacyLevel == "private" {
+		privacy = "private"
+	}
+
+	var imageUrl string
+	if post.ImagePath != nil {
+		imageUrl = *post.ImagePath
+	}
+
+	var groupID string
+	if post.GroupID != nil {
+		groupID = post.GroupID.String()
+	}
+
+	return &models.PostResponse{
+		ID:            post.ID.String(),
+		AuthorID:      post.UserID.String(),
+		AuthorName:    authorName,
+		CreatedAt:     post.CreatedAt.Format(time.RFC3339),
+		Content:       post.Content,
+		ImageUrl:      imageUrl,
+		Privacy:       privacy,
+		GroupID:       groupID,
+		LikesCount:    likesCount,
+		CommentsCount: commentsCount,
+		UserReaction:  userReaction,
+	}, nil
 }

@@ -39,6 +39,9 @@ func main() {
 	// Initialize repositories
 	eventRepo := repository.NewEventRepository(sqliteConn)
 	eventResponseRepo := repository.NewEventResponseRepository(sqliteConn)
+	postRepo := repository.NewPostRepository(sqliteConn)
+	reactionRepo := repository.NewReactionRepository(sqliteConn)
+	commentRepo := repository.NewCommentRepository(sqliteConn)
 
 	// Initialize user & follow services
 	userService := services.NewUserService(sqliteConn)
@@ -46,16 +49,37 @@ func main() {
 	groupService := services.NewGroupService(sqliteConn)
 	notificationService := services.NewNotificationService(sqliteConn)
 
-	// Initialize services
+	// Initialize WebSocket hub
+	hub := websocket.NewHub()
+	go hub.Run()
+
+	// Initialize post and comment services
+	postService := services.NewPostService(
+		postRepo,
+		reactionRepo,
+		userService,
+		nil, // imageRepo - not used in current implementation
+		groupService,
+		hub,
+	)
+	commentService := services.NewCommentService(
+		commentRepo,
+		reactionRepo,
+		userService,
+		postRepo,
+		hub,
+	)
+
+	// Initialize event service
 	eventService := services.NewEventService(eventRepo, eventResponseRepo)
 
 	// Initialize handlers
 	eventHandler := handlers.NewEventHandler(eventService)
 	groupHandler := handlers.NewGroupHandler(groupService, sqliteConn)
+	postHandler := handlers.NewPostHandler(postService)
+	commentHandler := handlers.NewCommentHandler(commentService)
 
 	mux := http.NewServeMux()
-	hub := websocket.NewHub()
-	go hub.Run()
 	mux.HandleFunc("/ws", handleWebSocket(hub))
 	mux.HandleFunc("/api/auth/register", handlers.RegisterHandler(sqliteConn))
 	mux.HandleFunc("/api/auth/login", handlers.LoginHandler(sqliteConn))
@@ -63,7 +87,7 @@ func main() {
 	mux.HandleFunc("/api/auth/me", handlers.MeHandler(sqliteConn))
 
 	// Public user profile + visibility toggle
-	mux.HandleFunc("/api/users", handlers.ProfileHandler(userService, followService))
+	mux.Handle("/api/users", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.ProfileHandler(userService, followService))))
 	mux.Handle("/api/users/discover", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.DiscoverUsersHandler(sqliteConn, followService))))
 	mux.Handle("/api/users/visibility", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.ToggleVisibilityHandler(userService))))
 
@@ -105,22 +129,21 @@ func main() {
 	mux.Handle("/api/posts", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			// Get all posts (for feed)
-			handlers.GetPostsHandler(sqliteConn)(w, r)
+			postHandler.GetPosts(w, r)
 		case http.MethodPost:
-			handlers.CreatePostHandler(sqliteConn)(w, r)
+			postHandler.CreatePost(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
-	mux.Handle("/api/posts/", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/posts/{id}", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			handlers.GetPostHandler(sqliteConn)(w, r)
+			postHandler.GetPost(w, r)
 		case http.MethodPut:
-			handlers.UpdatePostHandler(sqliteConn)(w, r)
+			postHandler.UpdatePost(w, r)
 		case http.MethodDelete:
-			handlers.DeletePostHandler(sqliteConn)(w, r)
+			postHandler.DeletePost(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -128,9 +151,9 @@ func main() {
 	mux.Handle("/api/posts/{id}/reactions", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
-			handlers.AddReactionHandler(sqliteConn)(w, r)
+			postHandler.AddReaction(w, r)
 		case http.MethodDelete:
-			handlers.RemoveReactionHandler(sqliteConn)(w, r)
+			postHandler.RemoveReaction(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -138,9 +161,21 @@ func main() {
 	mux.Handle("/api/posts/{id}/comments", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			handlers.GetCommentsHandler(sqliteConn)(w, r)
+			commentHandler.GetComments(w, r)
 		case http.MethodPost:
-			handlers.AddCommentHandler(sqliteConn)(w, r)
+			commentHandler.AddComment(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
+	// Comment reaction routes
+	mux.Handle("/api/comments/{id}/reactions", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			commentHandler.AddCommentReaction(w, r)
+		case http.MethodDelete:
+			commentHandler.RemoveCommentReaction(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

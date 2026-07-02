@@ -1,11 +1,23 @@
 package websocket
 
 import (
+	"encoding/json"
 	"log"
 	"sync"
 
 	"github.com/google/uuid"
 )
+
+// WebSocketMessage represents a message to be published
+type WebSocketMessage struct {
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
+}
+
+// WebSocketHub defines the interface for publishing websocket messages
+type WebSocketHub interface {
+	Publish(msg WebSocketMessage)
+}
 
 // Subscription associates a client with a room.
 type Subscription struct {
@@ -82,7 +94,6 @@ func (h *Hub) Run() {
 			}
 
 			for client := range clients {
-
 				select {
 
 				case client.send <- b.Message:
@@ -116,5 +127,25 @@ func (h *Hub) BroadcastToRoom(room uuid.UUID, msg []byte) {
 	h.broadcast <- &Broadcast{
 		Room:    room,
 		Message: msg,
+	}
+}
+
+// Publish broadcasts a message to all connected clients
+func (h *Hub) Publish(msg WebSocketMessage) {
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("websocket marshal error: %v", err)
+		return
+	}
+
+	h.mu.RLock()
+	rooms := make([]uuid.UUID, 0, len(h.rooms))
+	for roomID := range h.rooms {
+		rooms = append(rooms, roomID)
+	}
+	h.mu.RUnlock()
+
+	for _, roomID := range rooms {
+		h.BroadcastToRoom(roomID, payload)
 	}
 }

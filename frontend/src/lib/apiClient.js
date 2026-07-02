@@ -165,8 +165,8 @@ export async function addPostRecipient(postId, userId) {
 // Comments
 // ---------------------------------------------------------------------------
 
-export async function getComments(postId) {
-  const { data } = await apiClient.get(`/posts/${postId}/comments`)
+export async function getComments(postId, params = {}) {
+  const { data } = await apiClient.get(`/posts/${postId}/comments`, { params })
   return data
 }
 
@@ -187,6 +187,16 @@ export async function deleteComment(commentId) {
 
 export async function reactToComment(commentId, reaction) {
   const { data } = await apiClient.post(`/comments/${commentId}/react`, { reaction })
+  return data
+}
+
+export async function addCommentReaction(commentId, reactionType) {
+  const { data } = await apiClient.post(`/comments/${commentId}/reactions`, { reaction_type: reactionType })
+  return data
+}
+
+export async function removeCommentReaction(commentId) {
+  const { data } = await apiClient.delete(`/comments/${commentId}/reactions`)
   return data
 }
 
