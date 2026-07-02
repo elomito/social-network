@@ -5,7 +5,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { getComments, createComment, addCommentReaction, removeCommentReaction } from '@/lib/apiClient'
 
-const INITIAL_DISPLAY_COUNT = 5
+const INITIAL_DISPLAY_COUNT = 3
 const COMMENTS_PER_PAGE = 20
 
 function CommentItem({ comment, postId, depth = 0, onReplyAdded, onReactionChange }) {
@@ -259,15 +259,32 @@ function mergeComments(existingComments, newComments) {
   return [...existingComments, ...uniqueNewComments]
 }
 
-export default function CommentList({ comments: initialComments, postId, totalCount, onCommentAdded, onReactionChange }) {
+export default function CommentList({ comments: initialComments, postId, totalCount, onCommentAdded, onReactionChange, initiallyExpanded = false }) {
   const [allComments, setAllComments] = useState(() => initialComments || [])
   const [isExpanded, setIsExpanded] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMoreComments, setHasMoreComments] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [expandAfterLoad, setExpandAfterLoad] = useState(false)
+  const [allCommentsLoaded, setAllCommentsLoaded] = useState(false)
+  
+  // Use a ref to track the current comment count for pagination offset
+  const commentCountRef = useRef(allComments.length)
+  commentCountRef.current = allComments.length
 
   // Track previous postId to detect post changes
   const prevPostIdRef = useRef(postId)
+
+  // Auto-load all comments when initiallyExpanded is true
+  useEffect(() => {
+    if (initiallyExpanded && allComments.length < (totalCount || allComments.length)) {
+      const remainingCount = (totalCount || allComments.length) - allComments.length
+      loadMoreComments(remainingCount)
+    }
+    if (initiallyExpanded) {
+      setIsExpanded(true)
+    }
+  }, [initiallyExpanded])
 
   // Sync with initialComments prop changes - only reset when postId changes
   useEffect(() => {
@@ -290,6 +307,21 @@ export default function CommentList({ comments: initialComments, postId, totalCo
     }
   }, [initialComments, postId])
 
+
+    useEffect(() => {
+    if (
+      expandAfterLoad &&
+      allComments.length >= effectiveTotalCount
+    ) {
+      setIsExpanded(true)
+      setExpandAfterLoad(false)
+    }
+  }, [
+    expandAfterLoad,
+    allComments.length,
+    effectiveTotalCount,
+  ])
+
   // Determine total count: use prop if provided, otherwise use loaded count
   const effectiveTotalCount = totalCount != null ? totalCount : allComments.length
 
@@ -297,7 +329,7 @@ export default function CommentList({ comments: initialComments, postId, totalCo
   const commentTree = useMemo(() => buildCommentTree(allComments), [allComments])
 
   // Determine if we should show "View More" button
-  const showViewMore = !isExpanded && allComments.length < effectiveTotalCount
+  const showViewMore = !isExpanded && (allComments.length < effectiveTotalCount || allCommentsLoaded)
 
   // Determine if we should show "Show Less" button
   const showShowLess = isExpanded && effectiveTotalCount > INITIAL_DISPLAY_COUNT
@@ -323,41 +355,51 @@ export default function CommentList({ comments: initialComments, postId, totalCo
     }
   }, [onCommentAdded])
 
-  const loadMoreComments = useCallback(async () => {
+  const loadMoreComments = useCallback(async (limit = COMMENTS_PER_PAGE) => {
     if (loadingMore || !hasMoreComments) return
 
     setLoadingMore(true)
     setLoadError('')
 
     try {
-      const offset = allComments.length
-      const newComments = await getComments(postId, { limit: COMMENTS_PER_PAGE, offset })
+      // Use ref to get current comment count (avoids stale closure)
+      const currentOffset = commentCountRef.current
 
-      if (!newComments || newComments.length === 0) {
+      const newComments = await getComments(postId, { limit, offset: currentOffset })
+
+       if (!newComments || newComments.length === 0) {
         setHasMoreComments(false)
         return
       }
 
       // Merge new comments with existing, avoiding duplicates
-      setAllComments((prev) => mergeComments(prev, newComments))
+      setAllComments((prev) => {
+        const merged = mergeComments(prev, newComments)
+        return merged
+      })
 
       // If we got fewer comments than requested, there are no more
-      if (newComments.length < COMMENTS_PER_PAGE) {
+      if (newComments.length < limit) {
         setHasMoreComments(false)
       }
+      
+      // Mark that all comments have been loaded
+      setAllCommentsLoaded(true)
     } catch (err) {
       setLoadError(err?.response?.data?.message || 'Failed to load more comments')
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMoreComments, allComments.length, postId])
+  }, [loadingMore, hasMoreComments, postId])
 
   const handleViewMore = async () => {
-    // If we haven't loaded all comments yet, fetch them first
+    // If we haven't loaded all comments yet, fetch them all at once
     if (allComments.length < effectiveTotalCount) {
-      await loadMoreComments()
+      const remainingCount = effectiveTotalCount - allComments.length
+      await loadMoreComments(remainingCount)
     }
     setIsExpanded(true)
+    setAllCommentsLoaded(true)
   }
 
   const handleShowLess = () => {
