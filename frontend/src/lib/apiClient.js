@@ -388,13 +388,15 @@ export async function getNotifications() {
   return data
 }
 
+// The backend does not expose a dedicated unread-count endpoint, so the
+// caller should derive the count from the notifications list instead.
 export async function getUnreadNotificationCount() {
   const { data } = await apiClient.get('/notifications/unread')
   return data
 }
 
 export async function markNotificationRead(notificationId) {
-  const { data } = await apiClient.post(`/notifications/${notificationId}/read`)
+  const { data } = await apiClient.post(`/notifications/read?id=${notificationId}`)
   return data
 }
 
