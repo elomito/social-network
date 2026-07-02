@@ -11,6 +11,17 @@ import {
 
 const NotificationContext = createContext(null)
 
+// Normalize backend notification fields to the names the UI expects.
+function normalizeNotification(n) {
+  if (!n) return n
+  return {
+    ...n,
+    body: n.body ?? n.message,
+    read: n.read ?? n.is_read,
+    from_user_id: n.from_user_id ?? n.initiator_id,
+  }
+}
+
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -23,8 +34,12 @@ export function NotificationProvider({ children }) {
         getNotifications(),
         getUnreadNotificationCount(),
       ])
-      setNotifications(list || [])
-      setUnreadCount(unread?.count ?? 0)
+      const normalized = (list || []).map(normalizeNotification)
+      setNotifications(normalized)
+      // Fall back to deriving the count from the list if the dedicated
+      // endpoint is unavailable or returns an unexpected shape.
+      const derivedCount = normalized.filter((n) => !n.read).length
+      setUnreadCount(unread?.count ?? derivedCount)
     } catch (error) {
       console.error('Failed to sync notification updates:', error)
     }
@@ -42,7 +57,7 @@ export function NotificationProvider({ children }) {
       const newNotification = message?.payload || message
       if (!newNotification) return
 
-      setNotifications((prev) => [newNotification, ...prev])
+      setNotifications((prev) => [normalizeNotification(newNotification), ...prev])
       setUnreadCount((prev) => prev + 1)
     })
 
