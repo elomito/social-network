@@ -1,12 +1,17 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import NotificationItem from '@/components/features/notifications/NotificationItem'
 import { useNotifications } from '@/context/NotificationContext'
 import { acceptFollowRequest, declineFollowRequest } from '@/lib/apiClient'
 
 export default function NotificationsPage() {
   const { notifications, markAsRead, refresh } = useNotifications()
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    refresh().finally(() => setLoading(false))
+  }, [refresh])
 
   async function handleAccept(notification) {
     try {
