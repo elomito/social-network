@@ -65,6 +65,11 @@ export async function getUserProfile(userId) {
   return data
 }
 
+export async function getDiscoverUsers(query = '') {
+  const { data } = await apiClient.get('/users/discover', { params: { query } })
+  return data
+}
+
 export async function updateUserProfile(userId, payload) {
   const { data } = await apiClient.put(`/users/${userId}`, payload)
   return data
@@ -90,7 +95,7 @@ export async function getUserFollowing(userId) {
 // ---------------------------------------------------------------------------
 
 export async function followUser(userId) {
-  const { data } = await apiClient.post(`/follow/${userId}`)
+  const { data } = await apiClient.post(`/follow?id=${userId}`)
   return data
 }
 
@@ -98,7 +103,7 @@ export async function followUser(userId) {
 // one "remove the relationship" endpoint, so unfollow and cancel-request are
 // the same call.
 export async function unfollowUser(userId) {
-  const { data } = await apiClient.delete(`/follow/${userId}`)
+  const { data } = await apiClient.post(`/unfollow?id=${userId}`)
   return data
 }
 
@@ -393,13 +398,15 @@ export async function getNotifications() {
   return data
 }
 
+// The backend does not expose a dedicated unread-count endpoint, so the
+// caller should derive the count from the notifications list instead.
 export async function getUnreadNotificationCount() {
   const { data } = await apiClient.get('/notifications/unread')
   return data
 }
 
 export async function markNotificationRead(notificationId) {
-  const { data } = await apiClient.post(`/notifications/${notificationId}/read`)
+  const { data } = await apiClient.post(`/notifications/read?id=${notificationId}`)
   return data
 }
 
