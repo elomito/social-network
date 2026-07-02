@@ -113,7 +113,7 @@ func UnfollowHandler(svc *services.FollowService) http.HandlerFunc {
 // If the profile is private and the viewer is not the owner nor a follower,
 // the handler returns a limited response with `locked: true` so the frontend
 // can show a locked indicator instead of a hard 403.
-func ProfileHandler(svc *services.UserService, followSvc *services.FollowService) http.HandlerFunc {
+func ProfileHandler(db *sql.DB, svc *services.UserService, followSvc *services.FollowService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "method not allowed"})
@@ -179,6 +179,7 @@ func ProfileHandler(svc *services.UserService, followSvc *services.FollowService
 			"last_name":       user.LastName,
 			"nickname":        user.Nickname,
 			"avatar_image_id": nil,
+			"avatar_url":      nil,
 			"about_me":        user.AboutMe,
 			"is_public":       user.IsPublic,
 			"created_at":      user.CreatedAt,
@@ -187,6 +188,11 @@ func ProfileHandler(svc *services.UserService, followSvc *services.FollowService
 		}
 		if user.AvatarImageID != nil {
 			resp["avatar_image_id"] = user.AvatarImageID.String()
+			var imageURL sql.NullString
+			err := db.QueryRowContext(r.Context(), "SELECT image_url FROM images WHERE id = ? LIMIT 1", user.AvatarImageID.String()).Scan(&imageURL)
+			if err == nil && imageURL.Valid {
+				resp["avatar_url"] = imageURL.String
+			}
 		}
 
 		writeJSON(w, http.StatusOK, resp)

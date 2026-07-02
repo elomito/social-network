@@ -87,7 +87,7 @@ func main() {
 	mux.HandleFunc("/api/auth/me", handlers.MeHandler(sqliteConn))
 
 	// Public user profile + visibility toggle
-	mux.Handle("/api/users", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.ProfileHandler(userService, followService))))
+	mux.Handle("/api/users", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.ProfileHandler(sqliteConn, userService, followService))))
 	mux.Handle("/api/users/discover", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.DiscoverUsersHandler(sqliteConn, followService))))
 	mux.Handle("/api/users/visibility", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.ToggleVisibilityHandler(userService))))
 
