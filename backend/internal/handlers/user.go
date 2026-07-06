@@ -17,6 +17,14 @@ type followRequestPayload struct {
 	TargetID uuid.UUID `json:"target_id"`
 }
 
+type updateProfileRequestPayload struct {
+	FirstName *string `json:"first_name"`
+	LastName  *string `json:"last_name"`
+	Nickname  *string `json:"nickname"`
+	AboutMe   *string `json:"about_me"`
+	IsPublic  *bool   `json:"is_public"`
+}
+
 // FollowHandler returns an HTTP handler to follow a user.
 // Expects either `?id=<target>` query param or JSON {"target_id":"..."}.
 func FollowHandler(svc *services.FollowService) http.HandlerFunc {
@@ -115,87 +123,148 @@ func UnfollowHandler(svc *services.FollowService) http.HandlerFunc {
 // can show a locked indicator instead of a hard 403.
 func ProfileHandler(db *sql.DB, svc *services.UserService, followSvc *services.FollowService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "method not allowed"})
-			return
-		}
-
-		idStr := r.URL.Query().Get("id")
-		if idStr == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"message": "missing id"})
-			return
-		}
-
-		id, err := uuid.Parse(idStr)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid id"})
-			return
-		}
-
-		user, err := svc.GetByID(r.Context(), id)
-		if err != nil {
-			if errors.Is(err, services.ErrUserNotFound) {
-				writeJSON(w, http.StatusNotFound, map[string]string{"message": "user not found"})
+		switch r.Method {
+		case http.MethodGet:
+			idStr := r.URL.Query().Get("id")
+			if idStr == "" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"message": "missing id"})
 				return
 			}
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "internal server error"})
-			return
-		}
-		// Determine viewer identity (if any)
-		actorStr := middleware.GetUserID(r)
-		var (
-			actorID    uuid.UUID
-			isOwner    bool
-			isFollower bool
-		)
-		if actorStr != "" {
-			if aid, err := uuid.Parse(actorStr); err == nil {
-				actorID = aid
-				isOwner = (actorID == user.ID)
-				if !isOwner && followSvc != nil {
-					isFollower = followSvc.IsFollowing(actorID, user.ID)
+
+			id, err := uuid.Parse(idStr)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid id"})
+				return
+			}
+
+			user, err := svc.GetByID(r.Context(), id)
+			if err != nil {
+				if errors.Is(err, services.ErrUserNotFound) {
+					writeJSON(w, http.StatusNotFound, map[string]string{"message": "user not found"})
+					return
+				}
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "internal server error"})
+				return
+			}
+			// Determine viewer identity (if any)
+			actorStr := middleware.GetUserID(r)
+			var (
+				actorID    uuid.UUID
+				isOwner    bool
+				isFollower bool
+			)
+			if actorStr != "" {
+				if aid, err := uuid.Parse(actorStr); err == nil {
+					actorID = aid
+					isOwner = (actorID == user.ID)
+					if !isOwner && followSvc != nil {
+						isFollower = followSvc.IsFollowing(actorID, user.ID)
+					}
 				}
 			}
-		}
 
-		// If profile is private and viewer is neither owner nor follower,
-		// return a limited locked response (frontend shows a locked indicator).
-		if !user.IsPublic && !isOwner && !isFollower {
+			// If profile is private and viewer is neither owner nor follower,
+			// return a limited locked response (frontend shows a locked indicator).
+			if !user.IsPublic && !isOwner && !isFollower {
+				resp := map[string]interface{}{
+					"id":         user.ID.String(),
+					"first_name": user.FirstName,
+					"last_name":  user.LastName,
+					"locked":     true,
+					"is_owner":   false,
+					"is_public":  user.IsPublic,
+				}
+				writeJSON(w, http.StatusOK, resp)
+				return
+			}
+
 			resp := map[string]interface{}{
-				"id":         user.ID.String(),
-				"first_name": user.FirstName,
-				"last_name":  user.LastName,
-				"locked":     true,
-				"is_owner":   false,
-				"is_public":  user.IsPublic,
+				"id":              user.ID.String(),
+				"first_name":      user.FirstName,
+				"last_name":       user.LastName,
+				"nickname":        user.Nickname,
+				"avatar_image_id": nil,
+				"avatar_url":      nil,
+				"about_me":        user.AboutMe,
+				"is_public":       user.IsPublic,
+				"created_at":      user.CreatedAt,
+				"is_owner":        isOwner,
+				"is_follower":     isFollower,
+			}
+			if user.AvatarImageID != nil {
+				resp["avatar_image_id"] = user.AvatarImageID.String()
+				var imageURL sql.NullString
+				err := db.QueryRowContext(r.Context(), "SELECT image_url FROM images WHERE id = ? LIMIT 1", user.AvatarImageID.String()).Scan(&imageURL)
+				if err == nil && imageURL.Valid {
+					resp["avatar_url"] = imageURL.String
+				}
+			}
+
+			writeJSON(w, http.StatusOK, resp)
+		case http.MethodPut:
+			actorStr := middleware.GetUserID(r)
+			if actorStr == "" {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "unauthorized"})
+				return
+			}
+			actorID, err := uuid.Parse(actorStr)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid user id"})
+				return
+			}
+
+			var payload updateProfileRequestPayload
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid payload"})
+				return
+			}
+
+			upd := services.UpdateProfilePayload{}
+			if payload.FirstName != nil {
+				upd.FirstName = payload.FirstName
+			}
+			if payload.LastName != nil {
+				upd.LastName = payload.LastName
+			}
+			if payload.Nickname != nil {
+				upd.Nickname = payload.Nickname
+			}
+			if payload.AboutMe != nil {
+				upd.AboutMe = payload.AboutMe
+			}
+			if payload.IsPublic != nil {
+				upd.IsPublic = payload.IsPublic
+			}
+
+			if err := svc.UpdateProfile(r.Context(), actorID, upd); err != nil {
+				if errors.Is(err, services.ErrUserNotFound) {
+					writeJSON(w, http.StatusNotFound, map[string]string{"message": "user not found"})
+					return
+				}
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "failed to update profile"})
+				return
+			}
+
+			resp := map[string]interface{}{"message": "profile updated"}
+			if payload.FirstName != nil {
+				resp["first_name"] = *payload.FirstName
+			}
+			if payload.LastName != nil {
+				resp["last_name"] = *payload.LastName
+			}
+			if payload.Nickname != nil {
+				resp["nickname"] = *payload.Nickname
+			}
+			if payload.AboutMe != nil {
+				resp["about_me"] = *payload.AboutMe
+			}
+			if payload.IsPublic != nil {
+				resp["is_public"] = *payload.IsPublic
 			}
 			writeJSON(w, http.StatusOK, resp)
-			return
+		default:
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"message": "method not allowed"})
 		}
-
-		resp := map[string]interface{}{
-			"id":              user.ID.String(),
-			"first_name":      user.FirstName,
-			"last_name":       user.LastName,
-			"nickname":        user.Nickname,
-			"avatar_image_id": nil,
-			"avatar_url":      nil,
-			"about_me":        user.AboutMe,
-			"is_public":       user.IsPublic,
-			"created_at":      user.CreatedAt,
-			"is_owner":        isOwner,
-			"is_follower":     isFollower,
-		}
-		if user.AvatarImageID != nil {
-			resp["avatar_image_id"] = user.AvatarImageID.String()
-			var imageURL sql.NullString
-			err := db.QueryRowContext(r.Context(), "SELECT image_url FROM images WHERE id = ? LIMIT 1", user.AvatarImageID.String()).Scan(&imageURL)
-			if err == nil && imageURL.Valid {
-				resp["avatar_url"] = imageURL.String
-			}
-		}
-
-		writeJSON(w, http.StatusOK, resp)
 	}
 }
 

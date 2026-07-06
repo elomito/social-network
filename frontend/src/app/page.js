@@ -44,6 +44,12 @@ export default function LandingPage() {
               >
                 Log in
               </Link>
+              <Link
+                href="/feed"
+                className="rounded border border-indigo-600 bg-indigo-50 px-6 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+              >
+                Continue to app
+              </Link>
             </div>
           </div>
 

@@ -13,8 +13,8 @@ type ctxKey string
 
 const userIDCtxKey ctxKey = "userID"
 
-// CtxUserID is the context key for storing the authenticated user ID
-const CtxUserID = "userID"
+// CtxUserID is the context key for storing the authenticated user ID.
+const CtxUserID ctxKey = "userID"
 
 func Auth(db *sql.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -37,19 +37,21 @@ func Auth(db *sql.DB) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), userIDCtxKey, session.UserID.String())
+			ctx := context.WithValue(r.Context(), CtxUserID, session.UserID.String())
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
 func GetUserID(r *http.Request) string {
-	v := r.Context().Value(userIDCtxKey)
-	if v == nil {
-		return ""
-	}
-	if s, ok := v.(string); ok {
-		return s
+	for _, key := range []any{CtxUserID, userIDCtxKey} {
+		v := r.Context().Value(key)
+		if v == nil {
+			continue
+		}
+		if s, ok := v.(string); ok {
+			return s
+		}
 	}
 	return ""
 }

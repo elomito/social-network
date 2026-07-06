@@ -17,6 +17,7 @@ export default function MyProfilePage() {
     isPublic: true,
   })
   const [saving, setSaving] = useState(false)
+  const [feedback, setFeedback] = useState({ type: '', message: '' })
   const router = useRouter()
 
   useEffect(() => {
@@ -85,6 +86,7 @@ export default function MyProfilePage() {
   const handleUpdate = async (e) => {
     e.preventDefault()
     setSaving(true)
+    setFeedback({ type: '', message: '' })
     try {
       const response = await fetch('/api/users', {
         method: 'PUT',
@@ -101,7 +103,10 @@ export default function MyProfilePage() {
         }),
       })
 
-      if (!response.ok) throw new Error('Failed to update profile')
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(errorText || 'Failed to update profile')
+      }
 
       setProfile((prev) => ({
         ...prev,
@@ -114,9 +119,10 @@ export default function MyProfilePage() {
         aboutMe: editData.aboutMe,
         isPublic: editData.isPublic,
       }))
+      setFeedback({ type: 'success', message: 'Profile updated successfully.' })
       setIsEditing(false)
     } catch (err) {
-      console.error(err.message)
+      setFeedback({ type: 'error', message: err.message || 'Failed to update profile' })
     } finally {
       setSaving(false)
     }
@@ -154,6 +160,11 @@ export default function MyProfilePage() {
 
       {/* Profile Info Card */}
       <div className="relative -mt-16 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+        {feedback.message && (
+          <div className={`mb-4 rounded-xl border p-3 text-sm ${feedback.type === 'success' ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+            {feedback.message}
+          </div>
+        )}
         <div className="flex flex-col items-center sm:flex-row sm:items-end sm:gap-6">
           <div className="relative -mt-16 sm:-mt-20">
             <Avatar

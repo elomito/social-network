@@ -12,7 +12,7 @@ const PROTECTED_PREFIXES = [
   '/profile',
 ]
 
-const AUTH_ONLY_PATHS = ['/login', '/register']
+const AUTH_ONLY_PATHS = ['/login', '/register', '/']
 
 export function middleware(request) {
   const { pathname } = request.nextUrl
@@ -41,6 +41,7 @@ export function middleware(request) {
 
 export const config = {
   matcher: [
+    '/',
     '/feed/:path*',
     '/discover/:path*',
     '/groups/:path*',
