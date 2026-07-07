@@ -1,9 +1,88 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { getTokenFromCookie } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
+import PostCard from '@/components/features/posts/PostCard'
+import {
+  followUser,
+  getUserFollowers,
+  getUserFollowing,
+  getUserPosts,
+  unfollowUser,
+} from '@/lib/apiClient'
+
+const TABS = [
+  { id: 'posts', label: 'Posts' },
+  { id: 'followers', label: 'Followers' },
+  { id: 'following', label: 'Following' },
+]
+
+function normalizeUsers(data, key) {
+  const users = data?.[key] || data || []
+  return Array.isArray(users) ? users : []
+}
+
+function UserList({ users, emptyMessage, type, onFollow, onUnfollow, actionUserId }) {
+  if (!users.length) {
+    return (
+      <div className="rounded-2xl border border-gray-100 bg-white py-12 text-center shadow-sm">
+        <p className="text-sm font-medium text-gray-500">{emptyMessage}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      {users.map((user) => {
+        const displayName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim()
+        const username = user.username || user.nickname || displayName || 'Network Peer'
+        const isFollowing = user.isFollowing ?? user.is_following ?? false
+        const isBusy = actionUserId === user.id
+
+        return (
+          <div
+            key={user.id}
+            className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 transition last:border-b-0 hover:bg-gray-50"
+          >
+            <Link href={`/profile/${user.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+              <Avatar src={user.avatar_url} name={displayName || username} size="md" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-gray-900">
+                  {displayName || username}
+                </p>
+                <p className="truncate text-xs text-gray-500">@{username}</p>
+              </div>
+            </Link>
+
+            {type === 'followers' && !isFollowing && (
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => onFollow(user)}
+                className="shrink-0 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-blue-500/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBusy ? 'Following...' : 'Follow back'}
+              </button>
+            )}
+
+            {type === 'following' && (
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => onUnfollow(user)}
+                className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBusy ? 'Unfollowing...' : 'Unfollow'}
+              </button>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export default function MyProfilePage() {
   const [profile, setProfile] = useState(null)
@@ -18,6 +97,12 @@ export default function MyProfilePage() {
   })
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState({ type: '', message: '' })
+  const [activeTab, setActiveTab] = useState('posts')
+  const [posts, setPosts] = useState([])
+  const [followers, setFollowers] = useState([])
+  const [following, setFollowing] = useState([])
+  const [tabError, setTabError] = useState('')
+  const [actionUserId, setActionUserId] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -39,24 +124,32 @@ export default function MyProfilePage() {
         const meData = await meResponse.json()
         const currentUserId = meData.user_id
 
-        const response = await fetch(`/api/users?id=${currentUserId}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        })
+        const [response, postsData, followersData, followingData] = await Promise.all([
+          fetch(`/api/users?id=${currentUserId}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+          }),
+          getUserPosts(currentUserId),
+          getUserFollowers(),
+          getUserFollowing(),
+        ])
 
         if (!response.ok) throw new Error('Failed to load profile.')
         const data = await response.json()
+        const profilePosts = postsData?.posts || postsData || []
+        const followerUsers = normalizeUsers(followersData, 'followers')
+        const followingUsers = normalizeUsers(followingData, 'following')
 
         setProfile({
           id: data.id,
           username: data.nickname || `${data.first_name} ${data.last_name}`,
           fullName: `${data.first_name || ''} ${data.last_name || ''}`.trim(),
           isPrivate: !data.is_public,
-          followingCount: 0,
-          followersCount: 0,
+          followingCount: data.followingCount ?? followingUsers.length,
+          followersCount: data.followersCount ?? followerUsers.length,
           isFollowing: false,
           isOwner: true,
           firstName: data.first_name,
@@ -65,6 +158,9 @@ export default function MyProfilePage() {
           aboutMe: data.about_me,
           isPublic: data.is_public,
         })
+        setPosts(Array.isArray(profilePosts) ? profilePosts : [])
+        setFollowers(followerUsers)
+        setFollowing(followingUsers)
 
         setEditData({
           firstName: data.first_name || '',
@@ -75,6 +171,7 @@ export default function MyProfilePage() {
         })
       } catch (err) {
         console.error(err.message)
+        setTabError('Some profile activity could not be loaded.')
       } finally {
         setLoading(false)
       }
@@ -128,15 +225,68 @@ export default function MyProfilePage() {
     }
   }
 
+  const handleFollowFromList = async (user) => {
+    if (!user?.id || actionUserId) return
+
+    setActionUserId(user.id)
+    setTabError('')
+    try {
+      await followUser(user.id)
+
+      setFollowers((prev) =>
+        prev.map((item) =>
+          item.id === user.id ? { ...item, isFollowing: true, is_following: true } : item
+        )
+      )
+      setFollowing((prev) => {
+        if (prev.some((item) => item.id === user.id)) return prev
+        return [{ ...user, isFollowing: true, is_following: true }, ...prev]
+      })
+      setProfile((prev) => ({
+        ...prev,
+        followingCount: (prev.followingCount || 0) + 1,
+      }))
+    } catch (err) {
+      setTabError(err?.response?.data?.message || 'Failed to follow this user.')
+    } finally {
+      setActionUserId('')
+    }
+  }
+
+  const handleUnfollowFromList = async (user) => {
+    if (!user?.id || actionUserId) return
+
+    setActionUserId(user.id)
+    setTabError('')
+    try {
+      await unfollowUser(user.id)
+
+      setFollowing((prev) => prev.filter((item) => item.id !== user.id))
+      setFollowers((prev) =>
+        prev.map((item) =>
+          item.id === user.id ? { ...item, isFollowing: false, is_following: false } : item
+        )
+      )
+      setProfile((prev) => ({
+        ...prev,
+        followingCount: Math.max(0, (prev.followingCount || 0) - 1),
+      }))
+    } catch (err) {
+      setTabError(err?.response?.data?.message || 'Failed to unfollow this user.')
+    } finally {
+      setActionUserId('')
+    }
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-        <div className="h-32 rounded-2xl bg-gray-200 animate-pulse" />
+        <div className="h-32 animate-pulse rounded-2xl bg-gray-200" />
         <div className="flex items-center gap-4">
-          <div className="h-20 w-20 rounded-full bg-gray-200 animate-pulse" />
+          <div className="h-20 w-20 animate-pulse rounded-full bg-gray-200" />
           <div className="space-y-2">
-            <div className="h-6 w-32 rounded bg-gray-200 animate-pulse" />
-            <div className="h-4 w-48 rounded bg-gray-200 animate-pulse" />
+            <div className="h-6 w-32 animate-pulse rounded bg-gray-200" />
+            <div className="h-4 w-48 animate-pulse rounded bg-gray-200" />
           </div>
         </div>
       </div>
@@ -145,7 +295,9 @@ export default function MyProfilePage() {
 
   if (!profile) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-12 text-center text-gray-500">Profile entry could not be located.</div>
+      <div className="mx-auto max-w-2xl px-4 py-12 text-center text-gray-500">
+        Profile entry could not be located.
+      </div>
     )
   }
 
@@ -161,7 +313,9 @@ export default function MyProfilePage() {
       {/* Profile Info Card */}
       <div className="relative -mt-16 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
         {feedback.message && (
-          <div className={`mb-4 rounded-xl border p-3 text-sm ${feedback.type === 'success' ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+          <div
+            className={`mb-4 rounded-xl border p-3 text-sm ${feedback.type === 'success' ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}
+          >
             {feedback.message}
           </div>
         )}
@@ -192,7 +346,7 @@ export default function MyProfilePage() {
           </button>
         </div>
 
-        {/* Stats */}
+        {/* Stats
         <div className="mt-6 flex justify-center gap-8 border-t border-gray-100 pt-6 sm:justify-start">
           <div className="text-center sm:text-left">
             <p className="text-2xl font-bold text-gray-900">{profile.followingCount || 0}</p>
@@ -202,7 +356,7 @@ export default function MyProfilePage() {
             <p className="text-2xl font-bold text-gray-900">{profile.followersCount || 0}</p>
             <p className="text-sm text-gray-500">Followers</p>
           </div>
-        </div>
+        </div> */}
 
         {/* Bio */}
         {profile.aboutMe && (
@@ -210,6 +364,79 @@ export default function MyProfilePage() {
             <h3 className="text-sm font-semibold text-gray-900">About</h3>
             <p className="mt-1 text-sm text-gray-600">{profile.aboutMe}</p>
           </div>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <div className="grid grid-cols-3 rounded-2xl border border-gray-100 bg-white p-1 shadow-sm">
+          {TABS.map((tab) => {
+            const count =
+              tab.id === 'posts'
+                ? posts.length
+                : tab.id === 'followers'
+                  ? profile.followersCount || followers.length
+                  : profile.followingCount || following.length
+
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={activeTab === tab.id ? 'ml-2 text-blue-100' : 'ml-2 text-gray-400'}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {tabError && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+            {tabError}
+          </div>
+        )}
+
+        {activeTab === 'posts' && (
+          <div className="space-y-4">
+            {posts.length ? (
+              posts.map((post) => <PostCard key={post.id} post={post} />)
+            ) : (
+              <div className="rounded-2xl border border-gray-100 bg-white py-12 text-center shadow-sm">
+                <p className="text-sm font-medium text-gray-500">
+                  You have not shared any posts yet.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'followers' && (
+          <UserList
+            users={followers}
+            emptyMessage="No followers yet."
+            type="followers"
+            onFollow={handleFollowFromList}
+            actionUserId={actionUserId}
+          />
+        )}
+
+        {activeTab === 'following' && (
+          <UserList
+            users={following}
+            emptyMessage="You are not following anyone yet."
+            type="following"
+            onUnfollow={handleUnfollowFromList}
+            actionUserId={actionUserId}
+          />
         )}
       </div>
 

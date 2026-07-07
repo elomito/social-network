@@ -96,6 +96,7 @@ func main() {
 	mux.Handle("/api/unfollow", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.UnfollowHandler(followService))))
 	mux.Handle("/api/follow/status", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.FollowStatusHandler(followService))))
 	mux.Handle("/api/followers", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.GetFollowersHandler(sqliteConn, followService))))
+	mux.Handle("/api/following", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.GetFollowingHandler(sqliteConn, followService))))
 
 	// Event routes
 	mux.Handle("/api/events", middleware.Auth(sqliteConn)(http.HandlerFunc(eventHandler.CreateEvent)))
