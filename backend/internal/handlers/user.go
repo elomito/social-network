@@ -191,6 +191,12 @@ func ProfileHandler(db *sql.DB, svc *services.UserService, followSvc *services.F
 				"is_owner":        isOwner,
 				"is_follower":     isFollower,
 			}
+			var followersCount, followingCount int
+			_ = db.QueryRowContext(r.Context(), "SELECT COUNT(1) FROM follows WHERE following_id = ?", user.ID.String()).Scan(&followersCount)
+			_ = db.QueryRowContext(r.Context(), "SELECT COUNT(1) FROM follows WHERE follower_id = ?", user.ID.String()).Scan(&followingCount)
+			resp["followersCount"] = followersCount
+			resp["followingCount"] = followingCount
+
 			if user.AvatarImageID != nil {
 				resp["avatar_image_id"] = user.AvatarImageID.String()
 				var imageURL sql.NullString
@@ -424,14 +430,62 @@ func GetFollowersHandler(db *sql.DB, followSvc *services.FollowService) http.Han
 			} else {
 				username = user.Email
 			}
+			isFollowing := followSvc.IsFollowing(userID, fid)
 			followers = append(followers, map[string]interface{}{
-				"id":       user.ID.String(),
-				"username": username,
+				"id":           user.ID.String(),
+				"username":     username,
+				"first_name":   user.FirstName,
+				"last_name":    user.LastName,
+				"isFollowing":  isFollowing,
+				"is_following": isFollowing,
 			})
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{"followers": followers})
+	}
+}
+
+// GetFollowingHandler returns a list of users the authenticated user follows.
+func GetFollowingHandler(db *sql.DB, followSvc *services.FollowService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uidStr := middleware.GetUserID(r)
+		if uidStr == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID, err := uuid.Parse(uidStr)
+		if err != nil {
+			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		followingIDs := followSvc.GetFollowing(userID)
+		following := make([]map[string]interface{}, 0, len(followingIDs))
+		userService := services.NewUserService(db)
+		for _, fid := range followingIDs {
+			user, err := userService.GetByID(r.Context(), fid)
+			if err != nil {
+				continue
+			}
+			username := ""
+			if user.Nickname != nil && *user.Nickname != "" {
+				username = *user.Nickname
+			} else {
+				username = user.Email
+			}
+			following = append(following, map[string]interface{}{
+				"id":           user.ID.String(),
+				"username":     username,
+				"first_name":   user.FirstName,
+				"last_name":    user.LastName,
+				"isFollowing":  true,
+				"is_following": true,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"following": following})
 	}
 }
 

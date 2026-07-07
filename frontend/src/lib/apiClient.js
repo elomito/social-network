@@ -76,17 +76,17 @@ export async function updateUserProfile(userId, payload) {
 }
 
 export async function getUserPosts(userId) {
-  const { data } = await apiClient.get(`/users/${userId}/posts`)
+  const { data } = await apiClient.get('/posts', { params: { user_id: userId, limit: 50 } })
   return data
 }
 
-export async function getUserFollowers(userId) {
-  const { data } = await apiClient.get(`/users/${userId}/followers`)
+export async function getUserFollowers() {
+  const { data } = await apiClient.get('/followers')
   return data
 }
 
-export async function getUserFollowing(userId) {
-  const { data } = await apiClient.get(`/users/${userId}/following`)
+export async function getUserFollowing() {
+  const { data } = await apiClient.get('/following')
   return data
 }
 
