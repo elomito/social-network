@@ -15,12 +15,12 @@ export default function ExplorePage() {
       try {
         const token = document.cookie
           .split('; ')
-          .find(row => row.startsWith('token='))
+          .find(row => row.startsWith('session_id='))
           ?.split('=')[1];
 
         // 1. Fetch current logged-in user context
-        const meResponse = await fetch('http://localhost:8080/api/users/me', {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const meResponse = await fetch('http://localhost:8080/api/auth/me', {
+          credentials: 'include', headers: { 'Authorization': `Bearer ${token}` }
         });
         if (meResponse.ok) {
           const meData = await meResponse.json();
@@ -28,8 +28,8 @@ export default function ExplorePage() {
         }
 
         // 2. Fetch all discoverable profiles across the network
-        const response = await fetch('http://localhost:8080/api/users', {
-          method: 'GET',
+        const response = await fetch('http://localhost:8080/api/users/discover', {
+          method: 'GET', credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
@@ -58,7 +58,7 @@ export default function ExplorePage() {
       setLoadingActionId(targetId);
       const token = document.cookie
         .split('; ')
-        .find(row => row.startsWith('token='))
+        .find(row => row.startsWith('session_id='))
         ?.split('=')[1];
 
       let endpoint = `/api/follow/${targetId}`;
