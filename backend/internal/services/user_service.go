@@ -23,6 +23,7 @@ type UpdateProfilePayload struct {
 	Nickname      *string    `json:"nickname"`
 	DateOfBirth   *time.Time `json:"date_of_birth"`
 	AvatarImageID *uuid.UUID `json:"avatar_image_id"`
+	CoverImageID  *uuid.UUID `json:"cover_image_id"`
 	AboutMe       *string    `json:"about_me"`
 	IsPublic      *bool      `json:"is_public"`
 }
@@ -39,16 +40,16 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (models.User, e
 	var u models.User
 	var (
 		idStr, email, passwordHash, firstName, lastName string
-		nickname, dobStr, avatarImageID, aboutMe        sql.NullString
+		nickname, dobStr, avatarImageID, coverImageID, aboutMe sql.NullString
 		isPublicInt                                     sql.NullInt64
 		createdAtStr, updatedAtStr, lastActiveStr       sql.NullString
 		deletedAtStr                                    sql.NullString
 	)
 
-	query := `SELECT id, email, password_hash, first_name, last_name, nickname, date_of_birth, avatar_image_id, about_me, is_public, created_at, updated_at, last_active_at, deleted_at FROM users WHERE id = ? LIMIT 1`
+	query := `SELECT id, email, password_hash, first_name, last_name, nickname, date_of_birth, avatar_image_id, cover_image_id, about_me, is_public, created_at, updated_at, last_active_at, deleted_at FROM users WHERE id = ? LIMIT 1`
 	err := s.db.QueryRowContext(ctx, query, id.String()).Scan(
 		&idStr, &email, &passwordHash, &firstName, &lastName,
-		&nickname, &dobStr, &avatarImageID, &aboutMe,
+		&nickname, &dobStr, &avatarImageID, &coverImageID, &aboutMe,
 		&isPublicInt, &createdAtStr, &updatedAtStr, &lastActiveStr, &deletedAtStr,
 	)
 	if err == sql.ErrNoRows {
@@ -75,6 +76,11 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (models.User, e
 	if avatarImageID.Valid {
 		if aid, err := uuid.Parse(avatarImageID.String); err == nil {
 			u.AvatarImageID = &aid
+		}
+	}
+	if coverImageID.Valid {
+		if cid, err := uuid.Parse(coverImageID.String); err == nil {
+			u.CoverImageID = &cid
 		}
 	}
 	if aboutMe.Valid {
@@ -181,6 +187,10 @@ func (s *UserService) UpdateProfile(ctx context.Context, id uuid.UUID, p UpdateP
 	if p.AvatarImageID != nil {
 		sets = append(sets, "avatar_image_id = ?")
 		args = append(args, p.AvatarImageID.String())
+	}
+	if p.CoverImageID != nil {
+		sets = append(sets, "cover_image_id = ?")
+		args = append(args, p.CoverImageID.String())
 	}
 	if p.AboutMe != nil {
 		sets = append(sets, "about_me = ?")

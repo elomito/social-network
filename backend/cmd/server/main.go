@@ -74,10 +74,10 @@ func main() {
 	eventService := services.NewEventService(eventRepo, eventResponseRepo)
 
 	// Initialize handlers
-	eventHandler := handlers.NewEventHandler(eventService)
-	groupHandler := handlers.NewGroupHandler(groupService, sqliteConn)
+	eventHandler := handlers.NewEventHandler(eventService, sqliteConn)
+	groupHandler := handlers.NewGroupHandler(groupService, sqliteConn, hub)
 	postHandler := handlers.NewPostHandler(postService)
-	commentHandler := handlers.NewCommentHandler(commentService)
+	commentHandler := handlers.NewCommentHandler(commentService, sqliteConn)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", handleWebSocket(hub))
@@ -196,6 +196,7 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+	mux.Handle("/api/groups/joined", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.GetJoinedGroups)))
 	mux.Handle("/api/groups/{id}", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -221,6 +222,13 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+	mux.Handle("/api/groups/{id}/invite", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			groupHandler.CreateGroupInvitation(w, r)
+		} else {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
 	mux.Handle("/api/groups/{id}/invitations/{invitationId}/respond", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.RespondToInvitation)))
 	mux.Handle("/api/groups/{id}/join-requests", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.GetGroupJoinRequests)))
 	mux.Handle("/api/groups/{id}/join-requests/{requestId}/respond", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.RespondToJoinRequest)))
@@ -230,6 +238,16 @@ func main() {
 			groupHandler.GetGroupPosts(w, r)
 		case http.MethodPost:
 			groupHandler.CreateGroupPost(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/groups/{id}/messages", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			groupHandler.GetGroupMessages(w, r)
+		case http.MethodPost:
+			groupHandler.SendGroupMessage(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -248,6 +266,8 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+
+	mux.Handle("/api/messages/unread-count", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.GetUnreadMessageCountsHandler(sqliteConn))))
 
 	// Notifications
 	mux.Handle("/api/notifications", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

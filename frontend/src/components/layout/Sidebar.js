@@ -1,9 +1,11 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useNotifications } from '@/context/NotificationContext'
+import useWebSocket from '@/hooks/useWebSocket'
+import { getUnreadMessageCounts } from '@/lib/apiClient'
 
 const NAV_ITEMS = [
   {
@@ -65,12 +67,64 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { unreadCount } = useNotifications?.() || { unreadCount: 0 }
+  const { unreadCount: notificationUnreadCount } = useNotifications?.() || { unreadCount: 0 }
+  const [unreadCounts, setUnreadCounts] = useState({ private_unread: 0, group_unread: 0 })
+  const { onMessage } = useWebSocket('*')
+
+  useEffect(() => {
+    let active = true
+    async function loadCounts() {
+      try {
+        const counts = await getUnreadMessageCounts()
+        if (active) {
+          setUnreadCounts(counts)
+        }
+      } catch (err) {
+        console.error('Failed to load unread message counts:', err)
+      }
+    }
+    loadCounts()
+    const interval = setInterval(loadCounts, 10000)
+
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = onMessage((data) => {
+      if (!data) return
+      const type = data.type
+
+      if (type === 'private_message') {
+        if (pathname !== '/messages') {
+          setUnreadCounts((prev) => ({
+            ...prev,
+            private_unread: prev.private_unread + 1,
+          }))
+        }
+      } else if (type === 'group_message') {
+        if (pathname !== '/messages') {
+          setUnreadCounts((prev) => ({
+            ...prev,
+            group_unread: prev.group_unread + 1,
+          }))
+        }
+      }
+    })
+    return unsubscribe
+  }, [onMessage, pathname])
 
   return (
     <nav className="space-y-1">
       {NAV_ITEMS.map((item) => {
         const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`)
+
+        let badgeCount = 0
+        if (item.href === '/notifications') badgeCount = notificationUnreadCount
+        if (item.href === '/messages') badgeCount = unreadCounts.private_unread
+        if (item.href === '/groups') badgeCount = unreadCounts.group_unread
 
         return (
           <Link
@@ -95,9 +149,9 @@ export default function Sidebar() {
               {item.label}
             </span>
 
-            {item.href === '/notifications' && unreadCount > 0 && (
+            {badgeCount > 0 && (
               <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
-                {unreadCount > 99 ? '99+' : unreadCount}
+                {badgeCount > 99 ? '99+' : badgeCount}
               </span>
             )}
           </Link>

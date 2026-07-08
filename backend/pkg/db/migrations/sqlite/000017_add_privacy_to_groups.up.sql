@@ -1,0 +1,1 @@
+-- Migration: Add privacy to groups table (handled dynamically in db.go)

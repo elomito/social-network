@@ -360,6 +360,15 @@ func (s *postService) CheckPostVisibility(ctx context.Context, postID, viewerID 
 		return true, nil
 	}
 
+	// If the post belongs to a group, only group members can view it
+	if post.GroupID != nil && *post.GroupID != uuid.Nil {
+		isMember, err := s.groupRepo.IsMember(ctx, *post.GroupID, viewerID)
+		if err != nil {
+			return false, err
+		}
+		return isMember, nil
+	}
+
 	switch post.PrivacyLevel {
 	case "public":
 		return true, nil
@@ -383,9 +392,6 @@ func (s *postService) CheckPostVisibility(ctx context.Context, postID, viewerID 
 		}
 		return false, nil
 	case "group":
-		// Check if viewer is a member of the group
-		// This requires the post to have a group association
-		// For now, assuming group posts have a group ID stored
 		return false, errors.New("group privacy check not implemented")
 	default:
 		return false, errors.New("unknown privacy level")

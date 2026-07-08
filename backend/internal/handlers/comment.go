@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -15,12 +16,14 @@ import (
 // CommentHandler handles all comment-related HTTP requests
 type CommentHandler struct {
 	commentService services.CommentService
+	db             *sql.DB
 }
 
 // NewCommentHandler creates a new comment handler with dependency injection
-func NewCommentHandler(commentService services.CommentService) *CommentHandler {
+func NewCommentHandler(commentService services.CommentService, db *sql.DB) *CommentHandler {
 	return &CommentHandler{
 		commentService: commentService,
+		db:             db,
 	}
 }
 
@@ -63,6 +66,33 @@ func (h *CommentHandler) GetComments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify if the post belongs to a group and check membership
+	var groupID sql.NullString
+	err = h.db.QueryRowContext(r.Context(), "SELECT group_id FROM posts WHERE id = ?", postIDUUID.String()).Scan(&groupID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "post not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "database error: "+err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if groupID.Valid && groupID.String != "" {
+		var isMember bool
+		err = h.db.QueryRowContext(r.Context(), `
+			SELECT EXISTS(SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?)
+		`, groupID.String, userID.String()).Scan(&isMember)
+		if err != nil {
+			http.Error(w, "database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !isMember {
+			http.Error(w, "forbidden: you must be a member of the group to view comments", http.StatusForbidden)
+			return
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(comments)
 }
@@ -86,6 +116,33 @@ func (h *CommentHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "invalid post id", http.StatusBadRequest)
 		return
+	}
+
+	// Verify if the post belongs to a group and check membership
+	var groupID sql.NullString
+	err = h.db.QueryRowContext(r.Context(), "SELECT group_id FROM posts WHERE id = ?", postIDUUID.String()).Scan(&groupID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "post not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "database error: "+err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if groupID.Valid && groupID.String != "" {
+		var isMember bool
+		err = h.db.QueryRowContext(r.Context(), `
+			SELECT EXISTS(SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?)
+		`, groupID.String, userID.String()).Scan(&isMember)
+		if err != nil {
+			http.Error(w, "database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !isMember {
+			http.Error(w, "forbidden: you must be a member of the group to comment", http.StatusForbidden)
+			return
+		}
 	}
 
 	var req struct {

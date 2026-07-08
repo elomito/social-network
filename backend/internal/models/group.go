@@ -14,6 +14,7 @@ type Group struct {
     Description  string     `json:"description" db:"description" validate:"max=500"`
     CreatorID    uuid.UUID  `json:"creator_id" db:"creator_id" validate:"required"`
     CoverImageID *uuid.UUID `json:"cover_image_id,omitempty" db:"cover_image_id"`
+    Privacy      string     `json:"privacy" db:"privacy"`
     CreatedAt    time.Time  `json:"created_at" db:"created_at"`
     UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
     IsActive     bool       `json:"is_active" db:"is_active"`
@@ -57,6 +58,7 @@ func NewGroup(creatorID uuid.UUID, title, description string) (Group, error) {
         Title:       title,
         Description: description,
         CreatorID:   creatorID,
+        Privacy:     "public",
         CreatedAt:   time.Now(),
         UpdatedAt:   time.Now(),
         IsActive:    true,

@@ -65,6 +65,9 @@ export async function logout() {
 
 export async function getCurrentUser() {
   const { data } = await apiClient.get('/auth/me')
+  if (data && data.user_id && !data.id) {
+    data.id = data.user_id
+  }
   return data
 }
 
@@ -92,13 +95,15 @@ export async function getUserPosts(userId) {
   return data
 }
 
-export async function getUserFollowers() {
-  const { data } = await apiClient.get('/followers')
+export async function getUserFollowers(userId) {
+  const params = userId ? { user_id: userId } : {}
+  const { data } = await apiClient.get('/followers', { params })
   return data
 }
 
-export async function getUserFollowing() {
-  const { data } = await apiClient.get('/following')
+export async function getUserFollowing(userId) {
+  const params = userId ? { user_id: userId } : {}
+  const { data } = await apiClient.get('/following', { params })
   return data
 }
 
@@ -228,6 +233,11 @@ export async function getGroups(params = {}) {
   return data
 }
 
+export async function getJoinedGroups() {
+  const { data } = await apiClient.get('/groups/joined')
+  return data
+}
+
 export async function createGroup(payload) {
   const { data } = await apiClient.post('/groups', payload)
   return data
@@ -249,7 +259,7 @@ export async function deleteGroup(groupId) {
 }
 
 export async function inviteToGroup(groupId, inviteeId) {
-  const { data } = await apiClient.post(`/groups/${groupId}/invite`, { invitee_id: inviteeId })
+  const { data } = await apiClient.post(`/groups/${groupId}/invitations`, { invitee_id: inviteeId })
   return data
 }
 
@@ -353,7 +363,7 @@ export async function getGroupEvents(groupId) {
 
 // status must be one of: 'going' | 'not_going' | 'maybe'
 export async function respondToEvent(eventId, status) {
-  const { data } = await apiClient.post(`/events/${eventId}/responses`, { status })
+  const { data } = await apiClient.post(`/events/${eventId}/responses`, { response: status, status })
   return data
 }
 
@@ -375,6 +385,12 @@ export async function getChats() {
   const { data } = await apiClient.get('/conversations')
   return data
 }
+
+export async function getUnreadMessageCounts() {
+  const { data } = await apiClient.get('/messages/unread-count')
+  return data
+}
+
 
 export async function getOrCreateConversation(peerId) {
   const { data } = await apiClient.get('/conversations/peer', { params: { peerId } })

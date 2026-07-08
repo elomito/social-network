@@ -3,7 +3,12 @@
 import React, { useState, useEffect } from 'react'
 import NotificationItem from '@/components/features/notifications/NotificationItem'
 import { useNotifications } from '@/context/NotificationContext'
-import { acceptFollowRequest, declineFollowRequest } from '@/lib/apiClient'
+import {
+  acceptFollowRequest,
+  declineFollowRequest,
+  TODO_BACKEND_respondToGroupInvitation,
+  TODO_BACKEND_respondToJoinRequest,
+} from '@/lib/apiClient'
 
 export default function NotificationsPage() {
   const { notifications, markAsRead, refresh } = useNotifications()
@@ -17,9 +22,11 @@ export default function NotificationsPage() {
     try {
       if (notification.type === 'follow_request') {
         await acceptFollowRequest(notification.from_user_id)
+      } else if (notification.type === 'group_invitation') {
+        await TODO_BACKEND_respondToGroupInvitation('any', notification.reference_id, true)
+      } else if (notification.type === 'group_join_request') {
+        await TODO_BACKEND_respondToJoinRequest('any', notification.reference_id, true)
       }
-      // Group invitations don't have a backend route yet (see
-      // TODO_BACKEND_respondToGroupInvitation in lib/apiClient.js).
       await markAsRead(notification.id)
       await refresh()
     } catch (err) {
@@ -31,6 +38,10 @@ export default function NotificationsPage() {
     try {
       if (notification.type === 'follow_request') {
         await declineFollowRequest(notification.from_user_id)
+      } else if (notification.type === 'group_invitation') {
+        await TODO_BACKEND_respondToGroupInvitation('any', notification.reference_id, false)
+      } else if (notification.type === 'group_join_request') {
+        await TODO_BACKEND_respondToJoinRequest('any', notification.reference_id, false)
       }
       await markAsRead(notification.id)
       await refresh()

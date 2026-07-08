@@ -208,7 +208,7 @@ func (s *GroupService) DeleteGroup(ctx context.Context, groupID uuid.UUID) error
 }
 
 // MEMBERSHIP CHECK
-func (s *GroupService) IsMember(ctx context.Context, userID, groupID uuid.UUID) (bool, error) {
+func (s *GroupService) IsMember(ctx context.Context, groupID, userID uuid.UUID) (bool, error) {
 	var count int
 
 	err := s.db.QueryRowContext(ctx, `

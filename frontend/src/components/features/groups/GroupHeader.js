@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function GroupHeader({ group, isMember, onJoinToggle, onInvite }) {
+export default function GroupHeader({ group, isMember, onJoinToggle, onInvite, isCreator, onEdit }) {
   const privacyLabel = group && group.privacy === 'private' ? 'Private' : 'Public'
 
   return (
@@ -32,25 +32,42 @@ export default function GroupHeader({ group, isMember, onJoinToggle, onInvite })
         </div>
 
         <div className="flex flex-col items-end gap-2">
-          {!isMember ? (
+          {isCreator && (
             <button
-              onClick={onJoinToggle}
-              className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              onClick={onEdit}
+              className="rounded bg-gray-100 hover:bg-gray-200 px-3.5 py-1.5 text-xs font-bold text-gray-700 transition"
             >
-              Join
+              ⚙️ Edit Group
             </button>
+          )}
+          {!isMember ? (
+            group && group.join_request_status === 'pending' ? (
+              <button
+                disabled
+                className="rounded bg-gray-200 px-4 py-2 text-sm text-gray-500 cursor-not-allowed font-medium"
+              >
+                Requested
+              </button>
+            ) : (
+              <button
+                onClick={onJoinToggle}
+                className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 font-medium transition active:scale-95"
+              >
+                Join
+              </button>
+            )
           ) : (
             <div className="flex flex-col items-end gap-2">
               <button
                 onClick={onJoinToggle}
-                className="rounded border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
+                className="rounded border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50 font-medium transition active:scale-95"
               >
                 Joined
               </button>
               <div className="flex gap-2">
                 <button
                   onClick={onInvite}
-                  className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700"
+                  className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700 font-medium transition active:scale-95"
                 >
                   Invite
                 </button>

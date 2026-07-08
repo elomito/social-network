@@ -18,11 +18,13 @@ type followRequestPayload struct {
 }
 
 type updateProfileRequestPayload struct {
-	FirstName *string `json:"first_name"`
-	LastName  *string `json:"last_name"`
-	Nickname  *string `json:"nickname"`
-	AboutMe   *string `json:"about_me"`
-	IsPublic  *bool   `json:"is_public"`
+	FirstName     *string `json:"first_name"`
+	LastName      *string `json:"last_name"`
+	Nickname      *string `json:"nickname"`
+	AvatarImageID *string `json:"avatar_image_id"`
+	CoverImageID  *string `json:"cover_image_id"`
+	AboutMe       *string `json:"about_me"`
+	IsPublic      *bool   `json:"is_public"`
 }
 
 // FollowHandler returns an HTTP handler to follow a user.
@@ -183,8 +185,12 @@ func ProfileHandler(db *sql.DB, svc *services.UserService, followSvc *services.F
 				"first_name":      user.FirstName,
 				"last_name":       user.LastName,
 				"nickname":        user.Nickname,
+				"email":           user.Email,
+				"date_of_birth":   user.DateOfBirth.Format("2006-01-02"),
 				"avatar_image_id": nil,
 				"avatar_url":      nil,
+				"cover_image_id":  nil,
+				"cover_url":       nil,
 				"about_me":        user.AboutMe,
 				"is_public":       user.IsPublic,
 				"created_at":      user.CreatedAt,
@@ -203,6 +209,15 @@ func ProfileHandler(db *sql.DB, svc *services.UserService, followSvc *services.F
 				err := db.QueryRowContext(r.Context(), "SELECT image_url FROM images WHERE id = ? LIMIT 1", user.AvatarImageID.String()).Scan(&imageURL)
 				if err == nil && imageURL.Valid {
 					resp["avatar_url"] = imageURL.String
+				}
+			}
+
+			if user.CoverImageID != nil {
+				resp["cover_image_id"] = user.CoverImageID.String()
+				var imageURL sql.NullString
+				err := db.QueryRowContext(r.Context(), "SELECT image_url FROM images WHERE id = ? LIMIT 1", user.CoverImageID.String()).Scan(&imageURL)
+				if err == nil && imageURL.Valid {
+					resp["cover_url"] = imageURL.String
 				}
 			}
 
@@ -241,6 +256,26 @@ func ProfileHandler(db *sql.DB, svc *services.UserService, followSvc *services.F
 			if payload.IsPublic != nil {
 				upd.IsPublic = payload.IsPublic
 			}
+			if payload.AvatarImageID != nil {
+				if *payload.AvatarImageID == "" {
+					// handle empty string if needed
+				} else if aid, err := uuid.Parse(*payload.AvatarImageID); err == nil {
+					upd.AvatarImageID = &aid
+				} else {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid avatar image id"})
+					return
+				}
+			}
+			if payload.CoverImageID != nil {
+				if *payload.CoverImageID == "" {
+					// handle empty string if needed
+				} else if cid, err := uuid.Parse(*payload.CoverImageID); err == nil {
+					upd.CoverImageID = &cid
+				} else {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid cover image id"})
+					return
+				}
+			}
 
 			if err := svc.UpdateProfile(r.Context(), actorID, upd); err != nil {
 				if errors.Is(err, services.ErrUserNotFound) {
@@ -266,6 +301,12 @@ func ProfileHandler(db *sql.DB, svc *services.UserService, followSvc *services.F
 			}
 			if payload.IsPublic != nil {
 				resp["is_public"] = *payload.IsPublic
+			}
+			if payload.AvatarImageID != nil {
+				resp["avatar_image_id"] = *payload.AvatarImageID
+			}
+			if payload.CoverImageID != nil {
+				resp["cover_image_id"] = *payload.CoverImageID
 			}
 			writeJSON(w, http.StatusOK, resp)
 		default:
@@ -403,17 +444,48 @@ func DiscoverUsersHandler(db *sql.DB, followSvc *services.FollowService) http.Ha
 	}
 }
 
-// GetFollowersHandler returns a list of users who follow the authenticated user
+// GetFollowersHandler returns a list of users who follow a given user (defaults to authenticated user)
 func GetFollowersHandler(db *sql.DB, followSvc *services.FollowService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uidStr := middleware.GetUserID(r)
-		if uidStr == "" {
+		uidStr := r.URL.Query().Get("user_id")
+		viewerIDStr := middleware.GetUserID(r)
+		if viewerIDStr == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+
+		if uidStr == "" {
+			uidStr = viewerIDStr
+		}
+
 		userID, err := uuid.Parse(uidStr)
 		if err != nil {
 			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		viewerID, err := uuid.Parse(viewerIDStr)
+		if err != nil {
+			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		// Check privacy
+		var isPublic bool
+		err = db.QueryRowContext(r.Context(), "SELECT is_public FROM users WHERE id = ?", userID.String()).Scan(&isPublic)
+		if err != nil {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+
+		isOwner := (viewerID == userID)
+		isFollower := false
+		if !isOwner && followSvc != nil {
+			isFollower = followSvc.IsFollowing(viewerID, userID)
+		}
+
+		if !isPublic && !isOwner && !isFollower {
+			http.Error(w, "forbidden: profile is private", http.StatusForbidden)
 			return
 		}
 
@@ -430,7 +502,7 @@ func GetFollowersHandler(db *sql.DB, followSvc *services.FollowService) http.Han
 			} else {
 				username = user.Email
 			}
-			isFollowing := followSvc.IsFollowing(userID, fid)
+			isFollowing := followSvc.IsFollowing(viewerID, fid)
 			followers = append(followers, map[string]interface{}{
 				"id":           user.ID.String(),
 				"username":     username,
@@ -446,17 +518,48 @@ func GetFollowersHandler(db *sql.DB, followSvc *services.FollowService) http.Han
 	}
 }
 
-// GetFollowingHandler returns a list of users the authenticated user follows.
+// GetFollowingHandler returns a list of users a given user follows (defaults to authenticated user).
 func GetFollowingHandler(db *sql.DB, followSvc *services.FollowService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uidStr := middleware.GetUserID(r)
-		if uidStr == "" {
+		uidStr := r.URL.Query().Get("user_id")
+		viewerIDStr := middleware.GetUserID(r)
+		if viewerIDStr == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+
+		if uidStr == "" {
+			uidStr = viewerIDStr
+		}
+
 		userID, err := uuid.Parse(uidStr)
 		if err != nil {
 			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		viewerID, err := uuid.Parse(viewerIDStr)
+		if err != nil {
+			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		// Check privacy
+		var isPublic bool
+		err = db.QueryRowContext(r.Context(), "SELECT is_public FROM users WHERE id = ?", userID.String()).Scan(&isPublic)
+		if err != nil {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+
+		isOwner := (viewerID == userID)
+		isFollower := false
+		if !isOwner && followSvc != nil {
+			isFollower = followSvc.IsFollowing(viewerID, userID)
+		}
+
+		if !isPublic && !isOwner && !isFollower {
+			http.Error(w, "forbidden: profile is private", http.StatusForbidden)
 			return
 		}
 
@@ -474,13 +577,14 @@ func GetFollowingHandler(db *sql.DB, followSvc *services.FollowService) http.Han
 			} else {
 				username = user.Email
 			}
+			isFollowing := followSvc.IsFollowing(viewerID, fid)
 			following = append(following, map[string]interface{}{
 				"id":           user.ID.String(),
 				"username":     username,
 				"first_name":   user.FirstName,
 				"last_name":    user.LastName,
-				"isFollowing":  true,
-				"is_following": true,
+				"isFollowing":  isFollowing,
+				"is_following": isFollowing,
 			})
 		}
 
