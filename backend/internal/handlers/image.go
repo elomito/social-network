@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -40,8 +41,8 @@ func UploadImageHandler(db *sql.DB) http.HandlerFunc {
 		defer file.Close()
 
 		// Read file content
-		buffer := make([]byte, fileHeader.Size)
-		if _, err := file.Read(buffer); err != nil {
+		buffer, err := io.ReadAll(file)
+		if err != nil {
 			http.Error(w, "failed to read image: "+err.Error(), http.StatusInternalServerError)
 			return
 		}

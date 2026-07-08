@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import GroupCard from '@/components/features/groups/GroupCard'
-import { getGroups, createGroup } from '@/lib/apiClient'
+import { getGroups, createGroup, uploadImage } from '@/lib/apiClient'
 
 export default function GroupsPage() {
   const [search, setSearch] = useState('')
@@ -11,6 +11,10 @@ export default function GroupsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [privacy, setPrivacy] = useState('public')
+  const [coverImageId, setCoverImageId] = useState('')
+  const [coverImageUrl, setCoverImageUrl] = useState('')
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
 
@@ -37,10 +41,13 @@ export default function GroupsPage() {
     setCreating(true)
     setError('')
     try {
-      await createGroup({ title, description })
-      setTitle('')
-      setDescription('')
-      setCreateOpen(false)
+      await createGroup({
+        title,
+        description,
+        privacy,
+        cover_image_id: coverImageId || undefined,
+      })
+      handleCloseCreate()
       fetchGroups()
     } catch (err) {
       const payload = err?.response?.data
@@ -48,6 +55,33 @@ export default function GroupsPage() {
     } finally {
       setCreating(false)
     }
+  }
+
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setUploadingImage(true)
+    setError('')
+    try {
+      const resp = await uploadImage(file)
+      setCoverImageId(resp.id)
+      setCoverImageUrl(resp.image_url)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to upload cover image.')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const handleCloseCreate = () => {
+    setTitle('')
+    setDescription('')
+    setPrivacy('public')
+    setCoverImageId('')
+    setCoverImageUrl('')
+    setError('')
+    setCreateOpen(false)
   }
 
   return (
@@ -155,17 +189,56 @@ export default function GroupsPage() {
                   placeholder="What is this group about?"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Privacy</label>
+                <select
+                  value={privacy}
+                  onChange={(e) => setPrivacy(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Cover Image</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="mt-1.5 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {uploadingImage && <p className="mt-1 text-xs text-gray-500">Uploading image...</p>}
+                {coverImageUrl && (
+                  <div className="mt-2 relative h-32 w-full rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={coverImageUrl} alt="Cover preview" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCoverImageId('')
+                        setCoverImageUrl('')
+                      }}
+                      className="absolute right-2 top-2 rounded-full bg-red-600 p-1.5 text-white hover:bg-red-700 transition"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setCreateOpen(false)}
+                  onClick={handleCloseCreate}
                   className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={creating}
+                  disabled={creating || uploadingImage}
                   className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                 >
                   {creating ? 'Creating...' : 'Create Group'}

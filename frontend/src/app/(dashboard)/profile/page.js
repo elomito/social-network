@@ -158,6 +158,8 @@ export default function MyProfilePage() {
           nickname: data.nickname,
           aboutMe: data.about_me,
           isPublic: data.is_public,
+          email: data.email,
+          dateOfBirth: data.date_of_birth,
         })
         setPosts(Array.isArray(profilePosts) ? profilePosts : [])
         setFollowers(followerUsers)
@@ -367,6 +369,61 @@ export default function MyProfilePage() {
             <p className="mt-1 text-sm text-gray-600">{profile.aboutMe}</p>
           </div>
         )}
+
+        {/* User Information */}
+        <div className="mt-6 border-t border-gray-100 pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-600">
+          <div>
+            <span className="block font-semibold text-gray-900">Email Address</span>
+            <span className="text-gray-600">{profile.email || 'Not specified'}</span>
+          </div>
+          <div>
+            <span className="block font-semibold text-gray-900">Date of Birth</span>
+            <span className="text-gray-600">{profile.dateOfBirth || 'Not specified'}</span>
+          </div>
+          <div className="sm:col-span-2 flex items-center justify-between bg-gray-50/50 rounded-xl border border-gray-100 p-3 mt-2">
+            <div>
+              <span className="block font-semibold text-gray-900">Profile Privacy Status</span>
+              <span className="text-xs text-gray-500">
+                {profile.isPublic 
+                  ? 'Your profile is Public. Anyone on the network can see your posts and followers.' 
+                  : 'Your profile is Private. Only your approved followers can see your posts and followers.'}
+              </span>
+            </div>
+            <button
+              onClick={async () => {
+                const newIsPublic = !profile.isPublic
+                try {
+                  const response = await fetch('/api/users/visibility', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ is_public: newIsPublic }),
+                  })
+                  if (!response.ok) throw new Error('Failed to update visibility')
+                  setProfile(prev => ({
+                    ...prev,
+                    isPublic: newIsPublic,
+                    isPrivate: !newIsPublic,
+                  }))
+                  setEditData(prev => ({
+                    ...prev,
+                    isPublic: newIsPublic,
+                  }))
+                } catch (e) {
+                  alert('Failed to update visibility')
+                }
+              }}
+              className={`rounded-xl px-3 py-1.5 text-xs font-semibold shadow-sm transition active:scale-95 ${
+                profile.isPublic 
+                  ? 'bg-amber-600 text-white hover:bg-amber-700' 
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {profile.isPublic ? 'Make Private' : 'Make Public'}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-4">

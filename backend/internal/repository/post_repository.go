@@ -248,13 +248,18 @@ func (r *sqlitePostRepository) GetProfilePosts(ctx context.Context, userID, view
 		FROM posts
 		WHERE author_id = ? AND group_id IS NULL
 		AND (
+			(SELECT is_public FROM users WHERE id = ?) = 1
+			OR author_id = ?
+			OR ? IN (SELECT follower_id FROM follows WHERE following_id = ?)
+		)
+		AND (
 			privacy_setting = 'public'
 			OR author_id = ?
 			OR (privacy_setting = 'almost_private' AND author_id IN (SELECT following_id FROM follows WHERE follower_id = ?))
 		)
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?`
-	rows, err := r.db.QueryContext(ctx, query, userID, viewerID, viewerID, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, userID, userID, viewerID, viewerID, userID, viewerID, viewerID, limit, offset)
 	if err != nil {
 		return nil, err
 	}

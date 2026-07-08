@@ -19,6 +19,7 @@ function normalizeNotification(n) {
     body: n.body ?? n.message,
     read: n.read ?? n.is_read,
     from_user_id: n.from_user_id ?? n.initiator_id,
+    groupId: n.groupId ?? (n.type === 'event_created' ? n.reference_id : undefined),
   }
 }
 

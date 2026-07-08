@@ -17,6 +17,7 @@ type ConversationResponse struct {
 	ID          string               `json:"id"` // peer_id
 	Peer        ConversationPeer     `json:"peer"`
 	LastMessage *ConversationMessage `json:"last_message,omitempty"`
+	UnreadCount int                  `json:"unread_count"`
 }
 
 type ConversationPeer struct {
@@ -99,12 +100,21 @@ func GetConversationsHandler(db *sql.DB, hub *websocket.Hub) http.HandlerFunc {
 				&lastMsg.ID, &lastMsg.Content, &lastMsg.SenderID, &lastMsgCreatedAt,
 			)
 
+			// Get unread count for this peer
+			var unreadCount int
+			_ = db.QueryRowContext(r.Context(), `
+				SELECT COUNT(*)
+				FROM private_messages
+				WHERE recipient_id = ? AND sender_id = ? AND is_read = 0
+			`, userIDStr, peerID).Scan(&unreadCount)
+
 			conv := ConversationResponse{
 				ID: peerID,
 				Peer: ConversationPeer{
 					ID:   peerID,
 					Name: name,
 				},
+				UnreadCount: unreadCount,
 			}
 
 			if err == nil {
@@ -135,6 +145,13 @@ func GetConversationMessagesHandler(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "invalid conversation/peer id", http.StatusBadRequest)
 			return
 		}
+
+		// Mark private messages as read
+		_, _ = db.ExecContext(r.Context(), `
+			UPDATE private_messages
+			SET is_read = 1
+			WHERE recipient_id = ? AND sender_id = ? AND is_read = 0
+		`, userIDStr, peerID)
 
 		limit := 50
 		if lstr := r.URL.Query().Get("limit"); lstr != "" {
@@ -306,3 +323,44 @@ func GetOrCreateConversationHandler(db *sql.DB) http.HandlerFunc {
 		json.NewEncoder(w).Encode(conv)
 	}
 }
+
+// GetUnreadMessageCountsHandler returns the total number of unread private and group messages
+func GetUnreadMessageCountsHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userIDStr := middleware.GetUserID(r)
+		if userIDStr == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		var privateUnread int
+		err := db.QueryRowContext(r.Context(), `
+			SELECT COUNT(*)
+			FROM private_messages
+			WHERE recipient_id = ? AND is_read = 0
+		`, userIDStr).Scan(&privateUnread)
+		if err != nil {
+			http.Error(w, "failed to count private unread messages: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var groupUnread int
+		err = db.QueryRowContext(r.Context(), `
+			SELECT COUNT(*)
+			FROM group_messages gm
+			JOIN group_members gmb ON gm.group_id = gmb.group_id
+			WHERE gmb.user_id = ? AND gm.sender_id != ? AND gm.created_at > gmb.last_read_at
+		`, userIDStr, userIDStr).Scan(&groupUnread)
+		if err != nil {
+			http.Error(w, "failed to count group unread messages: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]int{
+			"private_unread": privateUnread,
+			"group_unread":   groupUnread,
+		})
+	}
+}
+

@@ -1,18 +1,24 @@
 'use client'
-
+ 
 import React, { useEffect, useState, useRef } from 'react'
 import useWebSocket from '@/hooks/useWebSocket'
 import MessageBubble from '@/components/features/chat/MessageBubble'
+import { useAuth } from '@/hooks/useAuth'
 import {
   getChats,
   getChatMessages,
   sendPrivateMessage,
   getOrCreateConversation,
   getUserFollowers,
+  getJoinedGroups,
+  getGroupMessages,
+  sendGroupMessage,
 } from '@/lib/apiClient'
 
 export default function MessagesPage() {
-  const { onMessage } = useWebSocket('private_message')
+  const { user } = useAuth()
+  const currentUserId = user?.user_id
+  const { send, onMessage } = useWebSocket('*')
   const [chats, setChats] = useState([])
   const [friends, setFriends] = useState([])
   const [activePeerId, setActivePeerId] = useState(null)
@@ -21,18 +27,35 @@ export default function MessagesPage() {
   const [error, setError] = useState('')
   const listRef = useRef(null)
 
+  const activeChat = chats.find((c) => (c.peer?.id ?? c.id) === activePeerId)
+  const isGroupActive = activeChat?.isGroup === true
+
   useEffect(() => {
     let cancelled = false
 
     async function load() {
       try {
-        const [chatsData, followersData] = await Promise.all([
+        const [chatsData, followersData, groupsData] = await Promise.all([
           getChats(),
-          getUserFollowers()
+          getUserFollowers(),
+          getJoinedGroups()
         ])
         if (cancelled) return
         
-        const conversations = chatsData || []
+        const privateConversations = chatsData || []
+        const groupConversations = (groupsData || []).map(g => ({
+          id: g.id,
+          isGroup: true,
+          title: g.title,
+          peer: {
+            id: g.id,
+            name: g.title,
+          },
+          unread_count: g.unread_count || 0,
+          last_message: null
+        }))
+
+        const conversations = [...privateConversations, ...groupConversations]
         setChats(conversations)
         if (conversations.length > 0) {
           setActivePeerId(conversations[0].peer?.id ?? conversations[0].id)
@@ -54,11 +77,40 @@ export default function MessagesPage() {
 
   useEffect(() => {
     if (!activePeerId) return
+    setChats((prev) =>
+      prev.map((c) => {
+        const peerId = c.peer?.id ?? c.id
+        if (peerId === activePeerId) {
+          return {
+            ...c,
+            unread_count: 0,
+          }
+        }
+        return c
+      })
+    )
+  }, [activePeerId])
+
+  // Manage WS subscriptions for group chat room
+  useEffect(() => {
+    if (!activePeerId || !isGroupActive) return
+    console.log('WS: Joining group room:', activePeerId)
+    send('join_group', { group_id: activePeerId })
+    return () => {
+      console.log('WS: Leaving group room:', activePeerId)
+      send('leave_group', { group_id: activePeerId })
+    }
+  }, [activePeerId, isGroupActive, send])
+
+  useEffect(() => {
+    if (!activePeerId) return
     let cancelled = false
 
     async function loadMessages() {
       try {
-        const msgs = await getChatMessages(activePeerId)
+        const msgs = isGroupActive
+          ? await getGroupMessages(activePeerId)
+          : await getChatMessages(activePeerId)
         if (cancelled) return
         setMessages(msgs || [])
         setTimeout(() => {
@@ -75,52 +127,97 @@ export default function MessagesPage() {
     return () => {
       cancelled = true
     }
-  }, [activePeerId])
+  }, [activePeerId, isGroupActive])
 
   useEffect(() => {
     const unsubscribe = onMessage((data) => {
       if (!data) return
-      const msg = data.message || data
-      const fromOrTo = msg.sender_id === activePeerId || msg.recipient_id === activePeerId
-      if (fromOrTo) {
-        setMessages((m) => {
-          if (m.some((existing) => existing.id === msg.id)) return m
-          return [...m, msg]
-        })
-        setTimeout(() => {
-          if (listRef.current) {
-            listRef.current.scrollTop = listRef.current.scrollHeight
-          }
-        }, 20)
-      }
+      
+      const type = data.type
+      const payload = data.payload || data.message || data
 
-      // Also update the last message in the chat list
-      setChats((prev) =>
-        prev.map((c) => {
-          const peerId = c.peer?.id ?? c.id
-          if (peerId === msg.sender_id || peerId === msg.recipient_id) {
-            return {
-              ...c,
-              last_message: {
-                id: msg.id,
-                content: msg.content,
-                sender_id: msg.sender_id,
-                created_at: msg.created_at,
-              },
+      if (type === 'private_message') {
+        const fromOrTo = payload.sender_id === activePeerId || payload.recipient_id === activePeerId
+        if (fromOrTo && !isGroupActive) {
+          setMessages((m) => {
+            if (m.some((existing) => existing.id === payload.id)) return m
+            return [...m, payload]
+          })
+          setTimeout(() => {
+            if (listRef.current) {
+              listRef.current.scrollTop = listRef.current.scrollHeight
             }
-          }
-          return c
-        })
-      )
+          }, 20)
+        }
+
+        // Update the last message in the private chat list and increment unread_count if not active
+        setChats((prev) =>
+          prev.map((c) => {
+            const peerId = c.peer?.id ?? c.id
+            if (!c.isGroup && (peerId === payload.sender_id || peerId === payload.recipient_id)) {
+              const isActive = activePeerId === peerId && !isGroupActive
+              const isSender = payload.sender_id === peerId
+              return {
+                ...c,
+                unread_count: isActive ? 0 : (c.unread_count || 0) + (isSender ? 1 : 0),
+                last_message: {
+                  id: payload.id,
+                  content: payload.content,
+                  sender_id: payload.sender_id,
+                  created_at: payload.created_at || payload.createdAt,
+                },
+              }
+            }
+            return c
+          })
+        )
+      } else if (type === 'group_message') {
+        const msgGroupId = data.group_id || payload.group_id
+        if (msgGroupId === activePeerId && isGroupActive) {
+          setMessages((m) => {
+            if (m.some((existing) => existing.id === payload.id)) return m
+            return [...m, payload]
+          })
+          setTimeout(() => {
+            if (listRef.current) {
+              listRef.current.scrollTop = listRef.current.scrollHeight
+            }
+          }, 20)
+        }
+
+        // Update the last message in the group chat list and increment unread_count if not active
+        setChats((prev) =>
+          prev.map((c) => {
+            if (c.isGroup && c.id === msgGroupId) {
+              const isActive = activePeerId === msgGroupId && isGroupActive
+              const isOtherSender = payload.sender_id !== currentUserId
+              return {
+                ...c,
+                unread_count: isActive ? 0 : (c.unread_count || 0) + (isOtherSender ? 1 : 0),
+                last_message: {
+                  id: payload.id,
+                  content: `${payload.sender_name || 'Member'}: ${payload.content || payload.text}`,
+                  sender_id: payload.sender_id,
+                  created_at: payload.createdAt || payload.created_at,
+                },
+              }
+            }
+            return c
+          })
+        )
+      }
     })
     return unsubscribe
-  }, [onMessage, activePeerId])
+  }, [onMessage, activePeerId, isGroupActive, currentUserId])
 
   async function submit(e) {
     e.preventDefault()
     if (!text.trim() || !activePeerId) return
     try {
-      const sentMsg = await sendPrivateMessage(activePeerId, text.trim())
+      const sentMsg = isGroupActive
+        ? await sendGroupMessage(activePeerId, text.trim())
+        : await sendPrivateMessage(activePeerId, text.trim())
+        
       setMessages((m) => {
         if (m.some((existing) => existing.id === sentMsg.id)) return m
         return [...m, sentMsg]
@@ -135,9 +232,9 @@ export default function MessagesPage() {
               ...c,
               last_message: {
                 id: sentMsg.id,
-                content: sentMsg.content,
+                content: isGroupActive ? `You: ${sentMsg.content}` : sentMsg.content,
                 sender_id: sentMsg.sender_id,
-                created_at: sentMsg.created_at,
+                created_at: sentMsg.createdAt || sentMsg.created_at,
               },
             }
           }
@@ -173,7 +270,7 @@ export default function MessagesPage() {
     }
   }
 
-  const activeChat = chats.find((c) => (c.peer?.id ?? c.id) === activePeerId)
+ 
 
   return (
     <div className="flex gap-6 p-6 min-h-[85vh]">
@@ -198,12 +295,26 @@ export default function MessagesPage() {
                   }`}
                 >
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                    isSelected ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600'
+                    isSelected ? 'bg-blue-600 text-white shadow-md' : c.isGroup ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
                   }`}>
-                    {initials || '?'}
+                    {c.isGroup ? '👥' : initials || '?'}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold truncate text-gray-900">{peerName}</div>
+                    <div className="text-sm font-semibold truncate text-gray-900 flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 truncate">
+                        {peerName}
+                        {c.isGroup && (
+                          <span className="bg-indigo-50 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded-full font-medium">
+                            Group
+                          </span>
+                        )}
+                      </span>
+                      {c.unread_count > 0 && (
+                        <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
+                          {c.unread_count}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-gray-500 truncate">{c.last_message?.content || 'No messages yet'}</div>
                   </div>
                 </div>

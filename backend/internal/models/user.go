@@ -15,6 +15,7 @@ type User struct {
     Nickname      *string    `json:"nickname,omitempty" db:"nickname"`
     DateOfBirth   time.Time  `json:"date_of_birth" db:"date_of_birth"`
     AvatarImageID *uuid.UUID `json:"avatar_image_id,omitempty" db:"avatar_image_id"`
+    CoverImageID  *uuid.UUID `json:"cover_image_id,omitempty" db:"cover_image_id"`
     AboutMe       *string    `json:"about_me,omitempty" db:"about_me"`
     IsPublic      bool       `json:"is_public" db:"is_public"`
     CreatedAt     time.Time  `json:"created_at" db:"created_at"`

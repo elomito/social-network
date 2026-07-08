@@ -1,0 +1,1 @@
+-- Down migration (SQLite ALTER TABLE DROP COLUMN is not straightforward)

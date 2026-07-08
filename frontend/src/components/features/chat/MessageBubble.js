@@ -12,6 +12,9 @@ export default function MessageBubble({ message }) {
             : 'rounded-bl-md border border-gray-100 bg-gray-50 text-gray-900'
         }`}
       >
+        {!isSelf && message.sender_name && (
+          <p className="text-xs font-bold text-blue-600 mb-1">{message.sender_name}</p>
+        )}
         <p className="text-sm leading-relaxed">{message.text}</p>
         <p className={`mt-1 text-xs ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
           {new Date(message.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

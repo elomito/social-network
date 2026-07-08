@@ -18,7 +18,7 @@ export default function EventCard({ event, onRSVP }) {
             {dateLabel} • {timeLabel}
           </div>
         </div>
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-gray-600 font-medium">
           {event.going_count || 0} Going • {event.not_going_count || 0} Not Going
         </div>
       </div>
@@ -28,11 +28,22 @@ export default function EventCard({ event, onRSVP }) {
       <div className="mt-3 flex gap-2">
         <button
           onClick={() => onRSVP('going')}
-          className="rounded bg-blue-600 px-3 py-1 text-sm text-white"
+          className={`rounded px-3 py-1.5 text-xs font-semibold transition-all duration-200 active:scale-95 ${
+            event.user_response === 'going'
+              ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+          }`}
         >
           Going
         </button>
-        <button onClick={() => onRSVP('not_going')} className="rounded border px-3 py-1 text-sm">
+        <button
+          onClick={() => onRSVP('not_going')}
+          className={`rounded px-3 py-1.5 text-xs font-semibold transition-all duration-200 active:scale-95 ${
+            event.user_response === 'not_going'
+              ? 'bg-red-600 text-white shadow-sm shadow-red-500/30'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+          }`}
+        >
           Not Going
         </button>
       </div>
