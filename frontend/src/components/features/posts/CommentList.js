@@ -134,25 +134,27 @@ function CommentItem({ comment, postId, depth = 0, onReplyAdded, onReactionChang
             <span>{comment.likesCount > 0 ? comment.likesCount : 'Like'}</span>
           </button>
 
-          <button
-            onClick={() => setShowReplyForm(!showReplyForm)}
-            className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-gray-500 transition-all duration-200 hover:bg-gray-100 hover:text-blue-600"
-          >
-            <svg
-              className="h-3.5 w-3.5"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
+          {depth < 1 && (
+            <button
+              onClick={() => setShowReplyForm(!showReplyForm)}
+              className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-gray-500 transition-all duration-200 hover:bg-gray-100 hover:text-blue-600"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
-              />
-            </svg>
-            <span>Reply</span>
-          </button>
+              <svg
+                className="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z"
+                />
+              </svg>
+              <span>Comment</span>
+            </button>
+          )}
         </div>
 
         {/* Reply Form */}
@@ -211,7 +213,7 @@ function CommentItem({ comment, postId, depth = 0, onReplyAdded, onReactionChang
                 key={reply.id}
                 comment={reply}
                 postId={postId}
-                depth={depth + 1}
+                depth={1}
                 onReplyAdded={onReplyAdded}
                 onReactionChange={onReactionChange}
               />

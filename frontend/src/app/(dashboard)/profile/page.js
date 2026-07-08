@@ -103,6 +103,7 @@ export default function MyProfilePage() {
   const [following, setFollowing] = useState([])
   const [tabError, setTabError] = useState('')
   const [actionUserId, setActionUserId] = useState('')
+  const [currentUserId, setCurrentUserId] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -161,6 +162,7 @@ export default function MyProfilePage() {
         setPosts(Array.isArray(profilePosts) ? profilePosts : [])
         setFollowers(followerUsers)
         setFollowing(followingUsers)
+        setCurrentUserId(meData.user_id)
 
         setEditData({
           firstName: data.first_name || '',
@@ -408,7 +410,16 @@ export default function MyProfilePage() {
         {activeTab === 'posts' && (
           <div className="space-y-4">
             {posts.length ? (
-              posts.map((post) => <PostCard key={post.id} post={post} />)
+              posts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  currentUserId={currentUserId}
+                  onPostDeleted={(postId) => {
+                    setPosts((prev) => prev.filter((p) => p.id !== postId))
+                  }}
+                />
+              ))
             ) : (
               <div className="rounded-2xl border border-gray-100 bg-white py-12 text-center shadow-sm">
                 <p className="text-sm font-medium text-gray-500">

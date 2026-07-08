@@ -5,10 +5,10 @@ import React, { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { getTokenFromCookie } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
-import { createComment, uploadImage } from '@/lib/apiClient'
+import { createComment, uploadImage, deletePost, getCurrentUser } from '@/lib/apiClient'
 import CommentList from '@/components/features/posts/CommentList'
 
-export default function PostCard({ post, onReactionChange, onCommentAdded, commentPreview }) {
+export default function PostCard({ post, onReactionChange, onCommentAdded, commentPreview, currentUserId, onPostDeleted }) {
   const {
     authorName = 'Anonymous User',
     authorAvatar,
@@ -20,6 +20,7 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
     commentsCount = 0,
     id: postId,
     userReaction,
+    author_id: authorId,
   } = post
 
   const [optimisticLikes, setOptimisticLikes] = useState(likesCount)
@@ -32,6 +33,39 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
   const [commentSubmitting, setCommentSubmitting] = useState(false)
   const [commentError, setCommentError] = useState('')
   const [showAllComments, setShowAllComments] = useState(false)
+  const [localCurrentUserId, setLocalCurrentUserId] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const effectiveCurrentUserId = currentUserId || localCurrentUserId
+
+  React.useEffect(() => {
+    if (currentUserId) return
+    let cancelled = false
+    getCurrentUser().then((data) => {
+      if (!cancelled && data?.user_id) {
+        setLocalCurrentUserId(data.user_id)
+      }
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [currentUserId])
+
+  const isOwner = effectiveCurrentUserId && authorId && effectiveCurrentUserId === authorId
+
+  const handleDelete = async () => {
+    if (deleting) return
+    if (!window.confirm('Are you sure you want to delete this post?')) return
+
+    setDeleting(true)
+    try {
+      await deletePost(postId)
+      if (onPostDeleted) {
+        onPostDeleted(postId)
+      }
+    } catch (err) {
+      console.error('Failed to delete post:', err)
+      setDeleting(false)
+    }
+  }
 
   const formattedDate = createdAt
     ? new Date(createdAt).toLocaleDateString(undefined, {
@@ -168,12 +202,26 @@ export default function PostCard({ post, onReactionChange, onCommentAdded, comme
             </div>
           </div>
         </div>
-        <button className="rounded-lg p-2 text-gray-400 opacity-0 transition-all group-hover:bg-gray-100 group-hover:opacity-100">
+        <div className="flex items-center gap-1">
+          {isOwner && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="rounded-lg p-2 text-gray-400 opacity-0 transition-all group-hover:bg-red-50 group-hover:opacity-100 group-hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Delete post"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.061-.94-1.75-1.816-1.618l-3.073.549a2.25 2.25 0 01-1.972-2.072l.549-3.073c.059-.877.635-1.623 1.707-1.623h.008" />
+              </svg>
+            </button>
+          )}
+          <button className="rounded-lg p-2 text-gray-400 opacity-0 transition-all group-hover:bg-gray-100 group-hover:opacity-100">
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
           </svg>
         </button>
       </div>
+    </div>
 
       {/* Content */}
       <div className="px-4 pb-3">
