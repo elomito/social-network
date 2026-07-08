@@ -8,7 +8,7 @@ import { WS_URL } from '@/lib/config'
 const WebSocketContext = createContext(null)
 
 export function WebSocketProvider({ children }) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, user } = useAuth()
   const [connectionStatus, setConnectionStatus] = useState('DISCONNECTED') // DISCONNECTED, CONNECTING, CONNECTED, RECONNECTING
 
   const wsRef = useRef(null)
@@ -54,7 +54,8 @@ export function WebSocketProvider({ children }) {
     // cookies to WebSocket upgrade requests automatically for same-origin
     // (or CORS-credentialed) connections, so no token needs to be put in
     // the URL here.
-    const ws = new WebSocket(WS_URL)
+    const wsUrl = user?.user_id ? `${WS_URL}?user_id=${user.user_id}` : WS_URL
+    const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {
@@ -83,7 +84,7 @@ export function WebSocketProvider({ children }) {
     ws.onerror = () => {
       ws.close()
     }
-  }, [isAuthenticated, handleMessage])
+  }, [isAuthenticated, user, handleMessage])
 
   // 3. Graceful Teardown
   const disconnect = useCallback(() => {

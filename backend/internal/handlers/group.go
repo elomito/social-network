@@ -377,14 +377,15 @@ func (h *GroupHandler) ListGroupMembers(w http.ResponseWriter, r *http.Request) 
 	members := []GroupMemberJSON{}
 	for rows.Next() {
 		var m GroupMemberJSON
-		var firstName, lastName, nickname, joinedAtStr string
+		var firstName, lastName, joinedAtStr string
+		var nickname *string
 		err := rows.Scan(&m.ID, &firstName, &lastName, &nickname, &m.Role, &joinedAtStr)
 		if err != nil {
 			continue
 		}
 		name := firstName + " " + lastName
-		if nickname != "" {
-			name = nickname
+		if nickname != nil && *nickname != "" {
+			name = *nickname
 		}
 		m.Name = name
 		m.JoinedAt = joinedAtStr
@@ -416,14 +417,15 @@ func (h *GroupHandler) GetGroupInvitations(w http.ResponseWriter, r *http.Reques
 	for rows.Next() {
 		var inv GroupInvitationJSON
 		var u InvitationUser
-		var firstName, lastName, nickname, createdAtStr string
+		var firstName, lastName, createdAtStr string
+		var nickname *string
 		err := rows.Scan(&inv.ID, &inv.Status, &createdAtStr, &u.ID, &firstName, &lastName, &nickname)
 		if err != nil {
 			continue
 		}
 		name := firstName + " " + lastName
-		if nickname != "" {
-			name = nickname
+		if nickname != nil && *nickname != "" {
+			name = *nickname
 		}
 		u.Name = name
 		inv.Inviter = &u
@@ -546,14 +548,15 @@ func (h *GroupHandler) GetGroupJoinRequests(w http.ResponseWriter, r *http.Reque
 	for rows.Next() {
 		var req GroupInvitationJSON
 		var u InvitationUser
-		var firstName, lastName, nickname, createdAtStr string
+		var firstName, lastName, createdAtStr string
+		var nickname *string
 		err := rows.Scan(&req.ID, &req.Status, &createdAtStr, &u.ID, &firstName, &lastName, &nickname)
 		if err != nil {
 			continue
 		}
 		name := firstName + " " + lastName
-		if nickname != "" {
-			name = nickname
+		if nickname != nil && *nickname != "" {
+			name = *nickname
 		}
 		u.Name = name
 		req.User = &u
@@ -651,15 +654,16 @@ func (h *GroupHandler) GetGroupPosts(w http.ResponseWriter, r *http.Request) {
 	posts := []GroupPostJSON{}
 	for rows.Next() {
 		var p GroupPostJSON
-		var firstName, lastName, nickname, createdAtStr string
+		var firstName, lastName, createdAtStr string
+		var nickname *string
 		err := rows.Scan(&p.ID, &p.Content, &createdAtStr, &firstName, &lastName, &nickname, &p.Likes)
 		if err != nil {
 			continue
 		}
 
 		name := firstName + " " + lastName
-		if nickname != "" {
-			name = nickname
+		if nickname != nil && *nickname != "" {
+			name = *nickname
 		}
 		p.Author = &GroupAuthor{Name: name}
 		p.CreatedAt = createdAtStr
@@ -676,11 +680,12 @@ func (h *GroupHandler) GetGroupPosts(w http.ResponseWriter, r *http.Request) {
 		if cerr == nil {
 			for crows.Next() {
 				var comment GroupComment
-				var cf, cl, cn string
+				var cf, cl string
+				var cn *string
 				if err := crows.Scan(&comment.ID, &comment.Content, &cf, &cl, &cn); err == nil {
 					cName := cf + " " + cl
-					if cn != "" {
-						cName = cn
+					if cn != nil && *cn != "" {
+						cName = *cn
 					}
 					comment.Author = &GroupAuthor{Name: cName}
 					p.Comments = append(p.Comments, comment)

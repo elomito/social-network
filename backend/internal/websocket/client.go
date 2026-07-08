@@ -59,6 +59,12 @@ func ServeWS(
 
 	client := NewClient(hub, conn, userID)
 
+	// Automatically subscribe to their own personal room (for private messages/notifications)
+	if userID != uuid.Nil {
+		hub.Register(client, userID)
+		client.rooms[userID] = true
+	}
+
 	go client.WritePump()
 	go client.ReadPump()
 }
