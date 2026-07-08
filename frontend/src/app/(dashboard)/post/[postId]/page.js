@@ -1,10 +1,10 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import PostCard from '@/components/features/posts/PostCard'
 import CommentList from '@/components/features/posts/CommentList'
-import { getPost, getComments, createComment, uploadImage } from '@/lib/apiClient'
+import { getPost, getComments, createComment, uploadImage, getCurrentUser } from '@/lib/apiClient'
 import { getTokenFromCookie } from '@/lib/utils'
 import Avatar from '@/components/ui/Avatar'
 
@@ -12,6 +12,7 @@ const COMMENTS_PER_PAGE = 20
 
 export default function PostDetailPage() {
   const { postId } = useParams()
+  const router = useRouter()
   const [post, setPost] = useState(null)
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -21,6 +22,7 @@ export default function PostDetailPage() {
   const [commentImagePreview, setCommentImagePreview] = useState('')
   const [commentSubmitting, setCommentSubmitting] = useState(false)
   const [commentError, setCommentError] = useState('')
+  const [currentUserId, setCurrentUserId] = useState(null)
 
   useEffect(() => {
     if (!postId) return
@@ -111,6 +113,16 @@ export default function PostDetailPage() {
     setPost((prev) => (prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : prev))
   }
 
+  useEffect(() => {
+    let cancelled = false
+    getCurrentUser().then((data) => {
+      if (!cancelled && data?.user_id) {
+        setCurrentUserId(data.user_id)
+      }
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
   if (loading) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6">
@@ -146,6 +158,10 @@ export default function PostDetailPage() {
       <PostCard
         post={post}
         commentPreview={comments.slice(0, 3)}
+        currentUserId={currentUserId}
+        onPostDeleted={(postId) => {
+          router.push('/feed')
+        }}
         onCommentAdded={(postId, newComment) => {
           setComments((prev) => [...prev, newComment])
           setPost((prev) =>

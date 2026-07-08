@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import PostCard from '@/components/features/posts/PostCard'
 import PostComposer from '@/components/features/posts/PostComposer'
-import { getFeed, getComments } from '@/lib/apiClient'
+import { getFeed, getComments, getCurrentUser } from '@/lib/apiClient'
 
 export default function FeedPage() {
   const [posts, setPosts] = useState([])
@@ -13,6 +13,7 @@ export default function FeedPage() {
   const [hasMore, setHasMore] = useState(true)
   const [error, setError] = useState('')
   const [commentPreviews, setCommentPreviews] = useState({})
+  const [currentUserId, setCurrentUserId] = useState(null)
 
   const observer = useRef()
 
@@ -88,6 +89,25 @@ export default function FeedPage() {
     setPosts((prev) => [newPost, ...prev])
   }
 
+  useEffect(() => {
+    let cancelled = false
+    getCurrentUser().then((data) => {
+      if (!cancelled && data?.user_id) {
+        setCurrentUserId(data.user_id)
+      }
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  const handlePostDeleted = (postId) => {
+    setPosts((prev) => prev.filter((p) => p.id !== postId))
+    setCommentPreviews((prev) => {
+      const next = { ...prev }
+      delete next[postId]
+      return next
+    })
+  }
+
   return (
     <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 py-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
@@ -124,23 +144,25 @@ export default function FeedPage() {
               if (posts.length === index + 1) {
                 return (
                   <div ref={lastPostElementRef} key={post.id}>
-                    <PostCard
-                      post={post}
-                      commentPreview={commentPreviews[post.id] || []}
-                      onCommentAdded={(postId, newComment) => {
-                        setPosts((prev) =>
-                          prev.map((p) =>
-                            p.id === postId
-                              ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
-                              : p
-                          )
-                        )
-                        setCommentPreviews((prev) => ({
-                          ...prev,
-                          [postId]: [newComment, ...(prev[postId] || [])].slice(0, 3),
-                        }))
-                      }}
-                    />
+                <PostCard
+                  post={post}
+                  commentPreview={commentPreviews[post.id] || []}
+                  currentUserId={currentUserId}
+                  onPostDeleted={handlePostDeleted}
+                  onCommentAdded={(postId, newComment) => {
+                    setPosts((prev) =>
+                      prev.map((p) =>
+                        p.id === postId
+                          ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
+                          : p
+                      )
+                    )
+                    setCommentPreviews((prev) => ({
+                      ...prev,
+                      [postId]: [newComment, ...(prev[postId] || [])].slice(0, 3),
+                    }))
+                  }}
+                />
                   </div>
                 )
               }
@@ -149,6 +171,8 @@ export default function FeedPage() {
                   key={post.id}
                   post={post}
                   commentPreview={commentPreviews[post.id] || []}
+                  currentUserId={currentUserId}
+                  onPostDeleted={handlePostDeleted}
                   onCommentAdded={(postId, newComment) => {
                     setPosts((prev) =>
                       prev.map((p) =>
