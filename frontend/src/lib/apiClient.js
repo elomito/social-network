@@ -26,8 +26,20 @@ export const apiClient = axios.create({
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // eslint-disable-next-line no-console
-    console.error('API Error:', error.response?.data || error.message)
+    const status = error.response?.status
+    const data = error.response?.data
+    const config = error.config
+    const isNetworkError = !error.response
+    const message = data && Object.keys(data).length > 0 ? data : error.message
+
+    console.error('API Error:', {
+      url: config?.url,
+      method: config?.method,
+      status,
+      isNetworkError,
+      data: message
+    })
+
     return Promise.reject(error)
   }
 )
