@@ -111,6 +111,18 @@ func (c *Client) ReadPump() {
 			continue
 		}
 
+		// Fallback check if group_id is wrapped inside a payload field
+		if msg.GroupID == uuid.Nil {
+			var raw struct {
+				Payload struct {
+					GroupID uuid.UUID `json:"group_id"`
+				} `json:"payload"`
+			}
+			if err := json.Unmarshal(data, &raw); err == nil && raw.Payload.GroupID != uuid.Nil {
+				msg.GroupID = raw.Payload.GroupID
+			}
+		}
+
 		switch msg.Type {
 
 		case "join_group":

@@ -8,6 +8,7 @@ import (
 
 	"backend/internal/middleware"
 	"backend/internal/services"
+	"backend/internal/websocket"
 
 	"github.com/google/uuid"
 )
@@ -15,12 +16,14 @@ import (
 type GroupHandler struct {
 	groupService *services.GroupService
 	db           *sql.DB
+	hub          *websocket.Hub
 }
 
-func NewGroupHandler(groupService *services.GroupService, db *sql.DB) *GroupHandler {
+func NewGroupHandler(groupService *services.GroupService, db *sql.DB, hub *websocket.Hub) *GroupHandler {
 	return &GroupHandler{
 		groupService: groupService,
 		db:           db,
+		hub:          hub,
 	}
 }
 
@@ -93,12 +96,24 @@ func (h *GroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
+		Title        string `json:"title"`
+		Description  string `json:"description"`
+		Privacy      string `json:"privacy"`
+		CoverImageID string `json:"cover_image_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Title == "" {
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
+	}
+
+	privacy := req.Privacy
+	if privacy == "" {
+		privacy = "public"
+	}
+
+	var coverImageID interface{}
+	if req.CoverImageID != "" {
+		coverImageID = req.CoverImageID
 	}
 
 	groupID := uuid.New().String()
@@ -112,9 +127,9 @@ func (h *GroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(r.Context(), `
-		INSERT INTO groups (id, title, description, creator_id, created_at, updated_at, is_active)
-		VALUES (?, ?, ?, ?, ?, ?, 1)
-	`, groupID, req.Title, req.Description, userIDStr, now, now)
+		INSERT INTO groups (id, title, description, creator_id, privacy, cover_image_id, created_at, updated_at, is_active)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+	`, groupID, req.Title, req.Description, userIDStr, privacy, coverImageID, now, now)
 	if err != nil {
 		http.Error(w, "failed to insert group: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -139,13 +154,14 @@ func (h *GroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(GroupJSON{
-		ID:          groupID,
-		Title:       req.Title,
-		Description: req.Description,
-		CreatorID:   userIDStr,
-		MemberCount: 1,
-		Privacy:     "public",
-		CreatedAt:   now.Format(time.RFC3339),
+		ID:            groupID,
+		Title:         req.Title,
+		Description:   req.Description,
+		CreatorID:     userIDStr,
+		MemberCount:   1,
+		Privacy:       privacy,
+		CoverImageUrl: req.CoverImageID,
+		CreatedAt:     now.Format(time.RFC3339),
 	})
 }
 
@@ -157,11 +173,11 @@ func (h *GroupHandler) GetGroupByID(w http.ResponseWriter, r *http.Request) {
 	var coverImage sql.NullString
 	var createdAtStr string
 	err := h.db.QueryRowContext(r.Context(), `
-		SELECT id, title, description, creator_id, cover_image_id, created_at,
+		SELECT id, title, description, creator_id, privacy, cover_image_id, created_at,
 		       (SELECT count(*) FROM group_members WHERE group_id = id) as member_count
 		FROM groups
 		WHERE id = ? AND deleted_at IS NULL
-	`, groupID).Scan(&g.ID, &g.Title, &g.Description, &g.CreatorID, &coverImage, &createdAtStr, &g.MemberCount)
+	`, groupID).Scan(&g.ID, &g.Title, &g.Description, &g.CreatorID, &g.Privacy, &coverImage, &createdAtStr, &g.MemberCount)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "group not found", http.StatusNotFound)
@@ -171,7 +187,6 @@ func (h *GroupHandler) GetGroupByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	g.Privacy = "public"
 	g.CreatedAt = createdAtStr
 	if coverImage.Valid {
 		g.CoverImageUrl = coverImage.String
@@ -202,20 +217,32 @@ func (h *GroupHandler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
+		Title        string `json:"title"`
+		Description  string `json:"description"`
+		Privacy      string `json:"privacy"`
+		CoverImageID string `json:"cover_image_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
 
+	privacy := req.Privacy
+	if privacy == "" {
+		privacy = "public"
+	}
+
+	var coverImageID interface{}
+	if req.CoverImageID != "" {
+		coverImageID = req.CoverImageID
+	}
+
 	_, err = h.db.ExecContext(r.Context(), `
-		UPDATE groups SET title = ?, description = ?, updated_at = datetime('now')
+		UPDATE groups SET title = ?, description = ?, privacy = ?, cover_image_id = ?, updated_at = datetime('now')
 		WHERE id = ?
-	`, req.Title, req.Description, groupID)
+	`, req.Title, req.Description, privacy, coverImageID, groupID)
 	if err != nil {
-		http.Error(w, "failed to update group", http.StatusInternalServerError)
+		http.Error(w, "failed to update group: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -262,7 +289,7 @@ func (h *GroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT id, title, description, creator_id, cover_image_id, created_at,
+		SELECT id, title, description, creator_id, privacy, cover_image_id, created_at,
 		       (SELECT count(*) FROM group_members WHERE group_id = id) as member_count
 		FROM groups
 		WHERE deleted_at IS NULL AND (title LIKE ? OR description LIKE ?)
@@ -279,11 +306,10 @@ func (h *GroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 		var g GroupJSON
 		var coverImage sql.NullString
 		var createdAtStr string
-		err := rows.Scan(&g.ID, &g.Title, &g.Description, &g.CreatorID, &coverImage, &createdAtStr, &g.MemberCount)
+		err := rows.Scan(&g.ID, &g.Title, &g.Description, &g.CreatorID, &g.Privacy, &coverImage, &createdAtStr, &g.MemberCount)
 		if err != nil {
 			continue
 		}
-		g.Privacy = "public"
 		g.CreatedAt = createdAtStr
 		if coverImage.Valid {
 			g.CoverImageUrl = coverImage.String
@@ -446,6 +472,16 @@ func (h *GroupHandler) CreateGroupInvitation(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Verify membership (or creator check)
+	var isMember bool
+	err := h.db.QueryRowContext(r.Context(), `
+		SELECT EXISTS(SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?)
+	`, groupID, userIDStr).Scan(&isMember)
+	if err != nil || !isMember {
+		http.Error(w, "forbidden: only group members can invite others", http.StatusForbidden)
+		return
+	}
+
 	var req struct {
 		InviteeID string `json:"invitee_id"`
 	}
@@ -455,7 +491,7 @@ func (h *GroupHandler) CreateGroupInvitation(w http.ResponseWriter, r *http.Requ
 	}
 
 	invitationID := uuid.New().String()
-	_, err := h.db.ExecContext(r.Context(), `
+	_, err = h.db.ExecContext(r.Context(), `
 		INSERT INTO group_invitations (id, group_id, inviter_id, invitee_id, status, created_at, updated_at)
 		VALUES (?, ?, ?, ?, 'pending', datetime('now'), datetime('now'))
 	`, invitationID, groupID, userIDStr, req.InviteeID)
@@ -731,4 +767,210 @@ func (h *GroupHandler) CreateGroupPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
+}
+
+// GetGroupMessages returns the group message history
+func (h *GroupHandler) GetGroupMessages(w http.ResponseWriter, r *http.Request) {
+	groupID := r.PathValue("id")
+	userIDStr := middleware.GetUserID(r)
+	if userIDStr == "" {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Verify membership
+	var isMember bool
+	err := h.db.QueryRowContext(r.Context(), `
+		SELECT EXISTS(SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?)
+	`, groupID, userIDStr).Scan(&isMember)
+	if err != nil || !isMember {
+		http.Error(w, "forbidden: you are not a member of this group", http.StatusForbidden)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT gm.id, gm.sender_id, gm.content, gm.created_at, u.first_name, u.last_name, u.nickname
+		FROM group_messages gm
+		JOIN users u ON gm.sender_id = u.id
+		WHERE gm.group_id = ?
+		ORDER BY gm.created_at ASC
+	`, groupID)
+	if err != nil {
+		http.Error(w, "database query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type GroupMessageResponse struct {
+		ID         string `json:"id"`
+		SenderID   string `json:"sender_id"`
+		SenderName string `json:"sender_name"`
+		GroupID    string `json:"group_id"`
+		Content    string `json:"content"`
+		Text       string `json:"text"`
+		Self       bool   `json:"self"`
+		CreatedAt  string `json:"createdAt"`
+	}
+
+	messages := []GroupMessageResponse{}
+	for rows.Next() {
+		var msg GroupMessageResponse
+		var firstName, lastName string
+		var nickname *string
+		var createdAt time.Time
+
+		err := rows.Scan(&msg.ID, &msg.SenderID, &msg.Content, &createdAt, &firstName, &lastName, &nickname)
+		if err != nil {
+			continue
+		}
+
+		name := firstName + " " + lastName
+		if nickname != nil && *nickname != "" {
+			name = *nickname
+		}
+
+		msg.SenderName = name
+		msg.GroupID = groupID
+		msg.Text = msg.Content
+		msg.Self = (msg.SenderID == userIDStr)
+		msg.CreatedAt = createdAt.Format(time.RFC3339)
+		messages = append(messages, msg)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
+}
+
+// SendGroupMessage saves a group message and broadcasts it via WebSocket
+func (h *GroupHandler) SendGroupMessage(w http.ResponseWriter, r *http.Request) {
+	groupID := r.PathValue("id")
+	userIDStr := middleware.GetUserID(r)
+	if userIDStr == "" {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Verify membership
+	var isMember bool
+	err := h.db.QueryRowContext(r.Context(), `
+		SELECT EXISTS(SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?)
+	`, groupID, userIDStr).Scan(&isMember)
+	if err != nil || !isMember {
+		http.Error(w, "forbidden: you are not a member of this group", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Content == "" {
+		http.Error(w, "invalid request content", http.StatusBadRequest)
+		return
+	}
+
+	msgID := uuid.New().String()
+	now := time.Now().UTC()
+
+	_, err = h.db.ExecContext(r.Context(), `
+		INSERT INTO group_messages (id, group_id, sender_id, content, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, msgID, groupID, userIDStr, req.Content, now)
+	if err != nil {
+		http.Error(w, "failed to save message: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch sender details
+	var firstName, lastName string
+	var nickname *string
+	_ = h.db.QueryRowContext(r.Context(), `
+		SELECT first_name, last_name, nickname FROM users WHERE id = ?
+	`, userIDStr).Scan(&firstName, &lastName, &nickname)
+
+	name := firstName + " " + lastName
+	if nickname != nil && *nickname != "" {
+		name = *nickname
+	}
+
+	type GroupMessageResponse struct {
+		ID         string `json:"id"`
+		SenderID   string `json:"sender_id"`
+		SenderName string `json:"sender_name"`
+		GroupID    string `json:"group_id"`
+		Content    string `json:"content"`
+		Text       string `json:"text"`
+		Self       bool   `json:"self"`
+		CreatedAt  string `json:"createdAt"`
+	}
+
+	msgRes := GroupMessageResponse{
+		ID:         msgID,
+		SenderID:   userIDStr,
+		SenderName: name,
+		GroupID:    groupID,
+		Content:    req.Content,
+		Text:       req.Content,
+		CreatedAt:  now.Format(time.RFC3339),
+	}
+
+	// Broadcast via WebSocket to group room
+	if h.hub != nil {
+		groupUUID, err := uuid.Parse(groupID)
+		if err == nil {
+			msgResOther := msgRes
+			msgResOther.Self = false
+			payloadOther, _ := json.Marshal(map[string]interface{}{
+				"type":     "group_message",
+				"group_id": groupID,
+				"message":  msgResOther,
+			})
+			h.hub.BroadcastToRoom(groupUUID, payloadOther)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(msgRes)
+}
+
+// GetJoinedGroups returns groups the current user has joined
+func (h *GroupHandler) GetJoinedGroups(w http.ResponseWriter, r *http.Request) {
+	userIDStr := middleware.GetUserID(r)
+	if userIDStr == "" {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT g.id, g.title, g.description, g.creator_id, g.privacy, g.cover_image_id, g.created_at,
+		       (SELECT count(*) FROM group_members WHERE group_id = g.id) as member_count
+		FROM groups g
+		JOIN group_members gm ON g.id = gm.group_id
+		WHERE gm.user_id = ? AND g.deleted_at IS NULL
+		ORDER BY gm.joined_at DESC
+	`, userIDStr)
+	if err != nil {
+		http.Error(w, "database query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	groups := []GroupJSON{}
+	for rows.Next() {
+		var g GroupJSON
+		var coverImage sql.NullString
+		var createdAtStr string
+		err := rows.Scan(&g.ID, &g.Title, &g.Description, &g.CreatorID, &g.Privacy, &coverImage, &createdAtStr, &g.MemberCount)
+		if err != nil {
+			continue
+		}
+		g.CreatedAt = createdAtStr
+		if coverImage.Valid {
+			g.CoverImageUrl = coverImage.String
+		}
+		groups = append(groups, g)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(groups)
 }

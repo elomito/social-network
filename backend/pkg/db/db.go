@@ -73,6 +73,7 @@ var legacySchemaColumns = []schemaColumn{
 	{table: "groups", name: "description", definition: "description TEXT NOT NULL"},
 	{table: "groups", name: "creator_id", definition: "creator_id TEXT NOT NULL"},
 	{table: "groups", name: "cover_image_id", definition: "cover_image_id TEXT"},
+	{table: "groups", name: "privacy", definition: "privacy TEXT NOT NULL DEFAULT 'public'"},
 	{table: "groups", name: "created_at", definition: "created_at TEXT NOT NULL DEFAULT (datetime('now'))"},
 	{table: "groups", name: "updated_at", definition: "updated_at TEXT NOT NULL DEFAULT (datetime('now'))"},
 	{table: "groups", name: "is_active", definition: "is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1))"},

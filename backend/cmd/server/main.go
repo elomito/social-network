@@ -75,7 +75,7 @@ func main() {
 
 	// Initialize handlers
 	eventHandler := handlers.NewEventHandler(eventService)
-	groupHandler := handlers.NewGroupHandler(groupService, sqliteConn)
+	groupHandler := handlers.NewGroupHandler(groupService, sqliteConn, hub)
 	postHandler := handlers.NewPostHandler(postService)
 	commentHandler := handlers.NewCommentHandler(commentService)
 
@@ -196,6 +196,7 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+	mux.Handle("/api/groups/joined", middleware.Auth(sqliteConn)(http.HandlerFunc(groupHandler.GetJoinedGroups)))
 	mux.Handle("/api/groups/{id}", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -230,6 +231,16 @@ func main() {
 			groupHandler.GetGroupPosts(w, r)
 		case http.MethodPost:
 			groupHandler.CreateGroupPost(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/groups/{id}/messages", middleware.Auth(sqliteConn)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			groupHandler.GetGroupMessages(w, r)
+		case http.MethodPost:
+			groupHandler.SendGroupMessage(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

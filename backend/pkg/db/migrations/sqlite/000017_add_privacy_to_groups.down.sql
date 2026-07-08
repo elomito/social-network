@@ -1,0 +1,1 @@
+-- Migration: Remove privacy from groups table (no-op in SQLite due to limited ALTER TABLE support)
