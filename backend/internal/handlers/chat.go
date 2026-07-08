@@ -72,7 +72,8 @@ func GetConversationsHandler(db *sql.DB, hub *websocket.Hub) http.HandlerFunc {
 			}
 
 			// Get peer details
-			var firstName, lastName, nickname string
+			var firstName, lastName string
+			var nickname *string
 			err = db.QueryRowContext(r.Context(), `
 				SELECT first_name, last_name, nickname FROM users WHERE id = ?
 			`, peerID).Scan(&firstName, &lastName, &nickname)
@@ -81,8 +82,8 @@ func GetConversationsHandler(db *sql.DB, hub *websocket.Hub) http.HandlerFunc {
 			}
 
 			name := firstName + " " + lastName
-			if nickname != "" {
-				name = nickname
+			if nickname != nil && *nickname != "" {
+				name = *nickname
 			}
 
 			// Get last message
@@ -274,7 +275,8 @@ func GetOrCreateConversationHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		var firstName, lastName, nickname string
+		var firstName, lastName string
+		var nickname *string
 		err := db.QueryRowContext(r.Context(), `
 			SELECT first_name, last_name, nickname FROM users WHERE id = ?
 		`, peerID).Scan(&firstName, &lastName, &nickname)
@@ -288,8 +290,8 @@ func GetOrCreateConversationHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		name := firstName + " " + lastName
-		if nickname != "" {
-			name = nickname
+		if nickname != nil && *nickname != "" {
+			name = *nickname
 		}
 
 		conv := ConversationResponse{

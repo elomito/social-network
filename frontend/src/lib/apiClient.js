@@ -73,7 +73,7 @@ export async function getCurrentUser() {
 // ---------------------------------------------------------------------------
 
 export async function getUserProfile(userId) {
-  const { data } = await apiClient.get(`/users/${userId}`)
+  const { data } = await apiClient.get('/users', { params: { id: userId } })
   return data
 }
 
@@ -372,19 +372,24 @@ export async function removeEventResponse(eventId) {
 // ---------------------------------------------------------------------------
 
 export async function getChats() {
-  const { data } = await apiClient.get('/chats')
+  const { data } = await apiClient.get('/conversations')
+  return data
+}
+
+export async function getOrCreateConversation(peerId) {
+  const { data } = await apiClient.get('/conversations/peer', { params: { peerId } })
   return data
 }
 
 // peerId is the other user's id; the backend treats this as the
 // get-or-create conversation lookup — there is no separate conversation id.
 export async function getChatMessages(peerId) {
-  const { data } = await apiClient.get(`/chats/${peerId}`)
+  const { data } = await apiClient.get(`/conversations/${peerId}/messages`)
   return data
 }
 
 export async function sendPrivateMessage(recipientId, content) {
-  const { data } = await apiClient.post('/chats', { recipient_id: recipientId, content })
+  const { data } = await apiClient.post(`/conversations/${recipientId}/messages`, { content })
   return data
 }
 
