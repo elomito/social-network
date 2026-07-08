@@ -275,26 +275,21 @@ func (s *postService) UpdatePost(ctx context.Context, postID, userID uuid.UUID, 
 	return s.enrichPost(ctx, *post, userID)
 }
 
-// DeletePost soft-deletes a post
+// DeletePost deletes a post and all associated comments
 func (s *postService) DeletePost(ctx context.Context, postID, userID uuid.UUID) error {
 	post, err := s.postRepo.GetByID(ctx, postID)
 	if err != nil {
 		return errors.New("post not found")
 	}
 
-	// Verify ownership
 	if post.UserID != userID {
 		return errors.New("unauthorized")
 	}
 
-	now := time.Now()
-	post.DeletedAt = &now
-
-	if err := s.postRepo.Update(ctx, post); err != nil {
+	if err := s.postRepo.Delete(ctx, postID); err != nil {
 		return err
 	}
 
-	// Publish event for real-time updates
 	s.websocketHub.Publish(websocket.WebSocketMessage{
 		Type: "post_deleted",
 		Data: map[string]uuid.UUID{"post_id": postID},
