@@ -11,6 +11,7 @@ import {
   getUserFollowing,
   getUserPosts,
   unfollowUser,
+  uploadImage,
 } from '@/lib/apiClient'
 
 const TABS = [
@@ -104,6 +105,7 @@ export default function MyProfilePage() {
   const [tabError, setTabError] = useState('')
   const [actionUserId, setActionUserId] = useState('')
   const [currentUserId, setCurrentUserId] = useState('')
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -160,6 +162,8 @@ export default function MyProfilePage() {
           isPublic: data.is_public,
           email: data.email,
           dateOfBirth: data.date_of_birth,
+          avatarUrl: data.avatar_url,
+          avatarImageId: data.avatar_image_id,
         })
         setPosts(Array.isArray(profilePosts) ? profilePosts : [])
         setFollowers(followerUsers)
@@ -183,6 +187,43 @@ export default function MyProfilePage() {
 
     fetchMyProfile()
   }, [router])
+
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadingAvatar(true)
+    setFeedback({ type: '', message: '' })
+
+    try {
+      const uploadData = await uploadImage(file)
+      const response = await fetch('/api/users', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ avatar_image_id: uploadData.id }),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(errorText || 'Failed to update avatar')
+      }
+
+      setProfile((prev) => ({
+        ...prev,
+        avatarUrl: uploadData.image_url,
+        avatarImageId: uploadData.id,
+      }))
+      setFeedback({ type: 'success', message: 'Profile photo updated.' })
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to update profile photo' })
+    } finally {
+      setUploadingAvatar(false)
+      event.target.value = ''
+    }
+  }
 
   const handleUpdate = async (e) => {
     e.preventDefault()
@@ -326,12 +367,24 @@ export default function MyProfilePage() {
         <div className="flex flex-col items-center sm:flex-row sm:items-end sm:gap-6">
           <div className="relative -mt-16 sm:-mt-20">
             <Avatar
-              src={null}
+              src={profile.avatarUrl}
               alt={profile.username}
               fallback={profile.username[0]?.toUpperCase()}
               size="xl"
               className="h-24 w-24 border-4 border-white shadow-lg sm:h-28 sm:w-28"
             />
+            <label className="absolute bottom-0 right-0 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white bg-blue-600 text-white shadow-lg transition hover:bg-blue-700">
+              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 8.186 5h7.628a2.31 2.31 0 0 1 1.359.475l2.13 1.98A2.31 2.31 0 0 1 20 8.7v8.55A2.31 2.31 0 0 1 17.69 19.56H6.31A2.31 2.31 0 0 1 4 17.25V8.7a2.31 2.31 0 0 1 .827-1.525l2-1.999Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 13.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+              </svg>
+            </label>
+            {uploadingAvatar && (
+              <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-gray-900/80 px-2 py-0.5 text-[10px] font-semibold text-white">
+                Uploading...
+              </span>
+            )}
             {profile.isPrivate && (
               <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-xs text-white">
                 🔒

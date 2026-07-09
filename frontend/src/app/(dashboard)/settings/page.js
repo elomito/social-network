@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import Avatar from '@/components/ui/Avatar'
+import { uploadImage } from '@/lib/apiClient'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
@@ -16,6 +17,7 @@ export default function SettingsPage() {
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const router = useRouter()
@@ -51,14 +53,17 @@ export default function SettingsPage() {
         if (!response.ok) throw new Error('Failed to load settings')
 
         const data = await response.json()
-        setSettings({
+        setSettings((prev) => ({
+          ...prev,
           email: data.email || '',
           firstName: data.first_name || '',
           lastName: data.last_name || '',
           nickname: data.nickname || '',
           aboutMe: data.about_me || '',
           isPublic: data.is_public !== false,
-        })
+          avatarUrl: data.avatar_url || prev.avatarUrl,
+          avatarImageId: data.avatar_image_id || prev.avatarImageId,
+        }))
       } catch (err) {
         setError(err.message)
       } finally {
@@ -75,6 +80,41 @@ export default function SettingsPage() {
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }))
+  }
+
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadingAvatar(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const uploadData = await uploadImage(file)
+      const response = await fetch('/api/users', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ avatar_image_id: uploadData.id }),
+      })
+
+      if (!response.ok) throw new Error('Failed to update profile photo')
+
+      setSettings((prev) => ({
+        ...prev,
+        avatarUrl: uploadData.image_url,
+        avatarImageId: uploadData.id,
+      }))
+      setSuccess('Profile photo updated successfully!')
+    } catch (err) {
+      setError(err.message || 'Failed to update profile photo')
+    } finally {
+      setUploadingAvatar(false)
+      event.target.value = ''
+    }
   }
 
   const handleSave = async (e) => {
@@ -152,7 +192,21 @@ export default function SettingsPage() {
         {/* Profile Card */}
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="mb-6 flex items-center gap-4">
-            <Avatar src={null} alt="Profile" fallback={settings.firstName?.[0] || 'U'} size="xl" />
+            <div className="relative">
+              <Avatar src={settings.avatarUrl} alt="Profile" fallback={settings.firstName?.[0] || 'U'} size="xl" />
+              <label className="absolute bottom-0 right-0 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white bg-blue-600 text-white shadow-lg transition hover:bg-blue-700">
+                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 8.186 5h7.628a2.31 2.31 0 0 1 1.359.475l2.13 1.98A2.31 2.31 0 0 1 20 8.7v8.55A2.31 2.31 0 0 1 17.69 19.56H6.31A2.31 2.31 0 0 1 4 17.25V8.7a2.31 2.31 0 0 1 .827-1.525l2-1.999Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 13.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                </svg>
+              </label>
+              {uploadingAvatar && (
+                <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-gray-900/80 px-2 py-0.5 text-[10px] font-semibold text-white">
+                  Uploading...
+                </span>
+              )}
+            </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900">Profile Information</h2>
               <p className="text-sm text-gray-500">Update your personal details</p>

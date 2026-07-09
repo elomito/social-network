@@ -107,6 +107,31 @@ func MarkNotificationReadHandler(svc *services.NotificationService) http.Handler
 	}
 }
 
+// UnreadNotificationsHandler returns the unread notification count for the authenticated user.
+func UnreadNotificationsHandler(svc *services.NotificationService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		uidStr := middleware.GetUserID(r)
+		if uidStr == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID, err := uuid.Parse(uidStr)
+		if err != nil {
+			http.Error(w, "invalid user", http.StatusBadRequest)
+			return
+		}
+
+		count, err := svc.CountUnread(r.Context(), userID)
+		if err != nil {
+			http.Error(w, "failed", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"count": count})
+	}
+}
+
 // MarkAllNotificationsReadHandler marks all notifications for the user as read
 func MarkAllNotificationsReadHandler(svc *services.NotificationService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

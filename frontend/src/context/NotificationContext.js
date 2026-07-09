@@ -55,7 +55,8 @@ export function NotificationProvider({ children }) {
 
   useEffect(() => {
     const unsubscribe = onMessage((message) => {
-      const newNotification = message?.payload || message
+      const payload = message?.payload || message?.data || message
+      const newNotification = payload?.payload || payload
       if (!newNotification) return
 
       setNotifications((prev) => [normalizeNotification(newNotification), ...prev])

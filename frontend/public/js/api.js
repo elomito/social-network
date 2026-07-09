@@ -1,5 +1,5 @@
 window.api = (function () {
-  const DEFAULT_BACKEND = "http://127.0.0.1:8080";
+  const DEFAULT_BACKEND = "";
   const useBackendOrigin = window.location.port === "8000";
   const apiOrigin = useBackendOrigin ? DEFAULT_BACKEND : "";
 

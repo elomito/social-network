@@ -17,9 +17,10 @@ export default function ExplorePage() {
           .split('; ')
           .find(row => row.startsWith('session_id='))
           ?.split('=')[1];
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
         // 1. Fetch current logged-in user context
-        const meResponse = await fetch('http://localhost:8080/api/auth/me', {
+        const meResponse = await fetch(`${apiBaseUrl}/auth/me`, {
           credentials: 'include', headers: { 'Authorization': `Bearer ${token}` }
         });
         if (meResponse.ok) {
@@ -28,7 +29,7 @@ export default function ExplorePage() {
         }
 
         // 2. Fetch all discoverable profiles across the network
-        const response = await fetch('http://localhost:8080/api/users/discover', {
+        const response = await fetch(`${apiBaseUrl}/users/discover`, {
           method: 'GET', credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
@@ -61,14 +62,15 @@ export default function ExplorePage() {
         .find(row => row.startsWith('session_id='))
         ?.split('=')[1];
 
-      let endpoint = `/api/follow/${targetId}`;
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+      let endpoint = `${apiBaseUrl}/follow/${targetId}`;
       if (targetUser.isFollowing || targetUser.is_following) {
-        endpoint = `/api/unfollow/${targetId}`;
+        endpoint = `${apiBaseUrl}/unfollow/${targetId}`;
       } else if (targetUser.isRequested || targetUser.is_requested) {
-        endpoint = `/api/follow-requests/cancel/${targetId}`;
+        endpoint = `${apiBaseUrl}/follow-requests/cancel/${targetId}`;
       }
 
-      const response = await fetch(`http://localhost:8080${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

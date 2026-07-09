@@ -1,14 +1,16 @@
 import axios from 'axios'
 
+export const getApiBaseUrl = () => process.env.NEXT_PUBLIC_API_BASE_URL || '/api'
+
 // Falls back to same-origin /api in case NEXT_PUBLIC_API_BASE_URL is not set,
 // instead of crashing the whole app at import time.
-const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api'
+const baseURL = getApiBaseUrl()
 
 if (!process.env.NEXT_PUBLIC_API_BASE_URL && process.env.NODE_ENV !== 'production') {
   // eslint-disable-next-line no-console
   console.warn(
     'NEXT_PUBLIC_API_BASE_URL is not set. Falling back to "/api". ' +
-      'Set it in .env.local to point at your backend, e.g. http://localhost:8080/api'
+      'Set it in .env.local to point at your backend, or rely on the Next.js rewrite.'
   )
 }
 

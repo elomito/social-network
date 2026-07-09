@@ -45,6 +45,16 @@ func (s *NotificationService) MarkAllRead(ctx context.Context, recipientID uuid.
 	return err
 }
 
+// CountUnread returns the number of unread notifications for a recipient.
+func (s *NotificationService) CountUnread(ctx context.Context, recipientID uuid.UUID) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM notifications WHERE recipient_id = ? AND is_read = 0`, recipientID.String()).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // ListForUser returns notifications for a recipient ordered by newest first
 func (s *NotificationService) ListForUser(ctx context.Context, recipientID uuid.UUID, limit int) ([]models.Notification, error) {
 	if limit <= 0 {

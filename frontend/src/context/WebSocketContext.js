@@ -28,7 +28,7 @@ export function WebSocketProvider({ children }) {
 
       listenersRef.current.forEach((listener) => {
         if (listener.type === message.type || listener.type === '*') {
-          listener.callback(message.payload || message)
+          listener.callback(message)
         }
       })
     } catch (err) {

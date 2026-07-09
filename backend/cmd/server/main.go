@@ -282,6 +282,7 @@ func main() {
 	})))
 	mux.Handle("/api/notifications/read", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.MarkNotificationReadHandler(notificationService))))
 	mux.Handle("/api/notifications/read-all", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.MarkAllNotificationsReadHandler(notificationService))))
+	mux.Handle("/api/notifications/unread", middleware.Auth(sqliteConn)(http.HandlerFunc(handlers.UnreadNotificationsHandler(notificationService))))
 
 	mux.Handle("/", http.FileServer(http.Dir("../frontend/public")))
 
